@@ -1,7 +1,6 @@
-
 import torch
-
 from torch.utils.data import Subset
+import torch.nn.functional as F
 import numpy as np
 import math
 
@@ -74,3 +73,8 @@ def gap2d(x, keepdims=False):
         out = out.view(out.size(0), out.size(1), 1, 1)
 
     return out
+
+def leaky_log(x, leaky_rate=0.12):
+    hm = torch.log(1 + F.relu(x))
+    hm_lky = hm - leaky_rate * F.relu(-x)
+    return hm_lky

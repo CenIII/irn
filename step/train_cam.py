@@ -72,7 +72,7 @@ def run(args):
 
         for step, pack in enumerate(train_data_loader):
 
-            img = pack['img']
+            img = pack['img'].cuda()
             label = pack['label'].cuda(non_blocking=True)
 
             x = model(img)

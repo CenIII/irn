@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from misc import torchutils
@@ -28,11 +29,15 @@ class Net(nn.Module):
         x = self.stage2(x).detach()
 
         x = self.stage3(x)
-        x = self.stage4(x)
+        x = self.stage4(x)  # N, 2048, 32, 32
 
-        x = torchutils.gap2d(x, keepdims=True)
-        x = self.classifier(x)
-        x = x.view(-1, 20)
+        # x = torchutils.gap2d(x, keepdims=True) # N, 2048, 1, 1
+        x = self.classifier(x) # N, 20, 32, 32
+
+        x = torchutils.leaky_log(x)
+        x = torchutils.gap2d(x) # N, 20
+        
+        x = x.view(-1, 20) # N, 20
 
         return x
 
@@ -63,8 +68,9 @@ class CAM(Net):
         x = self.stage4(x)
 
         x = F.conv2d(x, self.classifier.weight)
-        x = F.relu(x)
-
+        # x = F.relu(x)
+        x = torchutils.leaky_log(x,leaky_rate=0.) #torch.log(1+F.relu(x))
+        
         x = x[0] + x[1].flip(-1)
 
         return x

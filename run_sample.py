@@ -3,6 +3,26 @@ import os
 
 from misc import pyutils
 
+def join_path(args):
+    args.exp_root = os.path.join('exp', args.exp_root)
+    args.log_name = os.path.join(args.exp_root, args.log_name)
+    args.cam_weights_name = os.path.join(args.exp_root, args.cam_weights_name)
+    args.irn_weights_name = os.path.join(args.exp_root, args.irn_weights_name)
+    args.cam_out_dir = os.path.join(args.exp_root, args.cam_out_dir)
+    args.ir_label_out_dir = os.path.join(args.exp_root, args.ir_label_out_dir)
+    args.sem_seg_out_dir = os.path.join(args.exp_root, args.sem_seg_out_dir)
+    args.ins_seg_out_dir = os.path.join(args.exp_root, args.ins_seg_out_dir)
+
+    os.makedirs('./exp', exist_ok=True)
+    os.makedirs(args.exp_root, exist_ok=True)
+    os.makedirs(os.path.join(args.exp_root,"sess"), exist_ok=True)
+    os.makedirs(os.path.join(args.exp_root,"result"), exist_ok=True)
+    os.makedirs(args.cam_out_dir, exist_ok=True)
+    os.makedirs(args.ir_label_out_dir, exist_ok=True)
+    os.makedirs(args.sem_seg_out_dir, exist_ok=True)
+    os.makedirs(args.ins_seg_out_dir, exist_ok=True)
+    return args
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
@@ -46,6 +66,7 @@ if __name__ == '__main__':
     parser.add_argument("--sem_seg_bg_thres", default=0.25)
 
     # Output Path
+    parser.add_argument("--exp_root", default="exp0", type=str)
     parser.add_argument("--log_name", default="sample_train_eval", type=str)
     parser.add_argument("--cam_weights_name", default="sess/res50_cam.pth", type=str)
     parser.add_argument("--irn_weights_name", default="sess/res50_irn.pth", type=str)
@@ -67,11 +88,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    os.makedirs("sess", exist_ok=True)
-    os.makedirs(args.cam_out_dir, exist_ok=True)
-    os.makedirs(args.ir_label_out_dir, exist_ok=True)
-    os.makedirs(args.sem_seg_out_dir, exist_ok=True)
-    os.makedirs(args.ins_seg_out_dir, exist_ok=True)
+    args = join_path(args)
 
     pyutils.Logger(args.log_name + '.log')
     print(vars(args))
