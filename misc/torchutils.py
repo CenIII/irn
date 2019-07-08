@@ -74,7 +74,7 @@ def gap2d(x, keepdims=False):
 
     return out
 
-def leaky_log(x, leaky_rate=0.12):
-    hm = torch.log(1 + F.relu(x))
+def leaky_log(x, leaky_rate=0.2):
+    hm = torch.sqrt(F.relu(x)) #torch.log(1 + F.relu(x))
     hm_lky = hm - leaky_rate * F.relu(-x)
     return hm_lky
