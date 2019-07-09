@@ -19,7 +19,7 @@ class Net(nn.Module):
         self.stage4 = nn.Sequential(self.resnet50.layer4)
 
         self.classifier = nn.Conv2d(2048, 20, 1, bias=False)
-
+        self.saliency_classifier = nn.Conv2d(2048, 1, 1, bias=False)
         self.backbone = nn.ModuleList([self.stage1, self.stage2, self.stage3, self.stage4])
         self.newly_added = nn.ModuleList([self.classifier])
 
@@ -31,15 +31,13 @@ class Net(nn.Module):
         x = self.stage3(x)
         x = self.stage4(x)  # N, 2048, 32, 32
 
-        # x = torchutils.gap2d(x, keepdims=True) # N, 2048, 1, 1
-        x = self.classifier(x) # N, 20, 32, 32
-
-        x = torchutils.leaky_log(x)
-        x = torchutils.gap2d(x) # N, 20
+        x = torchutils.gap2d(x, keepdims=True) # N, 2048, 1, 1
+        sal = self.saliency_classifier(x.detach()) # N, 1,1,1
+        x = self.classifier(x) # N, 20, 1, 1
         
         x = x.view(-1, 20) # N, 20
-
-        return x
+        sal = sal.view(-1, 1) # N, 1
+        return x, sal
 
     def train(self, mode=True):
         for p in self.resnet50.conv1.parameters():
@@ -67,10 +65,12 @@ class CAM(Net):
 
         x = self.stage4(x)
 
+        sal = F.conv2d(x, self.saliency_classifier.weight)
+        sal = F.relu(sal)
         x = F.conv2d(x, self.classifier.weight)
         x = F.relu(x)
-        # x = torchutils.leaky_log(x,leaky_rate=0.) #torch.log(1+F.relu(x))
         
+        sal = sal[0] + sal[1].flip(-1)
         x = x[0] + x[1].flip(-1)
 
-        return x
+        return x, sal

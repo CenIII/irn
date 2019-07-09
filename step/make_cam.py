@@ -34,26 +34,49 @@ def _work(process_id, model, dataset, args):
 
             outputs = [model(img[0].cuda(non_blocking=True))
                        for img in pack['img']]
+            
+            sals = [outputs[i][1] for i in range(len(outputs))]
+            # print('sals[0] shape: '+str(sals[0].shape))
+            outputs = [outputs[i][0] for i in range(len(outputs))]
+            # print('outputs[0] shape: '+str(outputs[0].shape))
 
             strided_cam = torch.sum(torch.stack(
                 [F.interpolate(torch.unsqueeze(o, 0), strided_size, mode='bilinear', align_corners=False)[0] for o
                  in outputs]), 0)
-
+            # print('strided_cam shape: '+str(strided_cam.shape))
             highres_cam = [F.interpolate(torch.unsqueeze(o, 1), strided_up_size,
                                          mode='bilinear', align_corners=False) for o in outputs]
             highres_cam = torch.sum(torch.stack(highres_cam, 0), 0)[:, 0, :size[0], :size[1]]
 
+            strided_sals = torch.sum(torch.stack(
+                [F.interpolate(torch.unsqueeze(o, 0), strided_size, mode='bilinear', align_corners=False)[0] for o
+                 in sals]), 0)
+
+            highres_sals = [F.interpolate(torch.unsqueeze(o, 1), strided_up_size,
+                                         mode='bilinear', align_corners=False) for o in sals]
+            highres_sals = torch.sum(torch.stack(highres_sals, 0), 0)[:, 0, :size[0], :size[1]]
+            
+
+
             valid_cat = torch.nonzero(label)[:, 0]
 
             strided_cam = strided_cam[valid_cat]
+            # print("strided_cam shape after valid_cat: "+str(strided_cam.shape))
             strided_cam /= F.adaptive_max_pool2d(strided_cam, (1, 1)) + 1e-5
 
             highres_cam = highres_cam[valid_cat]
             highres_cam /= F.adaptive_max_pool2d(highres_cam, (1, 1)) + 1e-5
 
+            # strided_sals = strided_sals[0]
+            strided_sals /= F.adaptive_max_pool2d(strided_sals, (1, 1)) + 1e-5
+
+            # highres_sals = highres_sals[0]
+            highres_sals /= F.adaptive_max_pool2d(highres_sals, (1, 1)) + 1e-5
+
             # save cams
             np.save(os.path.join(args.cam_out_dir, img_name + '.npy'),
-                    {"keys": valid_cat, "cam": strided_cam.cpu(), "high_res": highres_cam.cpu().numpy()})
+                    {"keys": valid_cat, "cam": strided_cam.cpu(), "high_res": highres_cam.cpu().numpy(),
+                        "sal": strided_sals.cpu(), "high_res_sal": highres_sals.cpu().numpy()})
 
             if process_id == n_gpus - 1 and iter % (len(databin) // 20) == 0:
                 print("%d " % ((5*iter+1)//(len(databin) // 20)), end='')

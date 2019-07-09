@@ -24,8 +24,9 @@ def validate(model, data_loader):
 
             label = pack['label'].cuda(non_blocking=True)
 
-            x = model(img)
+            x, sal = model(img)
             loss1 = F.multilabel_soft_margin_loss(x, label)
+            loss1 += torchutils.multilabel_soft_pull_loss(sal)
 
             val_loss_meter.add({'loss1': loss1.item()})
 
@@ -75,8 +76,9 @@ def run(args):
             img = pack['img'].cuda()
             label = pack['label'].cuda(non_blocking=True)
 
-            x = model(img)
+            x, sal = model(img)
             loss = F.multilabel_soft_margin_loss(x, label)
+            loss += torchutils.multilabel_soft_pull_loss(sal)
 
             avg_meter.add({'loss1': loss.item()})
 
