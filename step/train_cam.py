@@ -10,9 +10,6 @@ import importlib
 import voc12.dataloader
 from misc import pyutils, torchutils
 from torch import autograd
-
-def isnan(x):
-    return torch.sum(x != x)>0
     
 def validate(model, data_loader):
     print('validating ... ', flush=True, end='')
@@ -27,7 +24,7 @@ def validate(model, data_loader):
 
             label = pack['label'].cuda(non_blocking=True)
 
-            x = model(img)
+            x = model(img,label)
             loss1 = F.multilabel_soft_margin_loss(x, label)
 
             val_loss_meter.add({'loss1': loss1.item()})
@@ -86,7 +83,7 @@ def run(args):
                 loss.backward()
                 optimizer.step()
 
-            if (optimizer.global_step-1)%20 == 0:
+            if (optimizer.global_step-1)%100 == 0:
                 timer.update_progress(optimizer.global_step / max_step)
 
                 print('step:%5d/%5d' % (optimizer.global_step - 1, max_step),

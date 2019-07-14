@@ -9,9 +9,6 @@ from .modules import Gap, KQ, Bayes
 KQ_FT_DIM = 32
 KQ_DIM = 16
 
-def isnan(x):
-    return torch.sum(x != x)>0
-
 class Net(nn.Module):
 
     def __init__(self):
@@ -73,24 +70,19 @@ class Net(nn.Module):
         x3 = self.stage3(x2).detach()
         x4 = self.stage4(x3)
         x5 = self.stage5(x4)  # N, 2048, KQ_FT_DIM, KQ_FT_DIM
-        # if isnan(x5):
-        #     import pdb;pdb.set_trace()
+
         kq_ft1 = self.fc_kq_ft1(x1)
         kq_ft2 = self.fc_kq_ft2(x2)
         kq_ft3 = self.fc_kq_ft3(x3)[..., :kq_ft2.size(2), :kq_ft2.size(3)]
         kq_ft4 = self.fc_kq_ft4(x4)[..., :kq_ft2.size(2), :kq_ft2.size(3)]
         kq_ft5 = self.fc_kq_ft5(x5)[..., :kq_ft2.size(2), :kq_ft2.size(3)]
         kq_ft_up = torch.cat([kq_ft1, kq_ft2, kq_ft3, kq_ft4, kq_ft5], dim=1)
-        
-        # if isnan(kq_ft_up):
-        #     import pdb;pdb.set_trace()
 
         K,Q = self.kq(kq_ft_up)
         feats = self.feature(x5)
         feats1, preds1 = self.bayes(feats, K, Q, label)
         pred = self.gap(feats1, save_hm=True)
-        # if isnan(pred):
-        #     import pdb;pdb.set_trace()
+
         preds1.append(pred)
 
         return preds1
