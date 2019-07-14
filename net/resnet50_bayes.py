@@ -6,6 +6,12 @@ from net import resnet50
 
 from .modules import Gap, KQ, Bayes
 
+KQ_FT_DIM = 32
+KQ_DIM = 16
+
+def isnan(x):
+    return torch.sum(x != x)>0
+
 class Net(nn.Module):
 
     def __init__(self):
@@ -20,43 +26,45 @@ class Net(nn.Module):
         self.stage5 = nn.Sequential(self.resnet50.layer4)
 
         self.fc_kq_ft1 = nn.Sequential(
-            nn.Conv2d(64, 32, 1, bias=False),
-            nn.GroupNorm(4, 32),
+            nn.Conv2d(64, KQ_FT_DIM, 1, bias=False),
+            nn.GroupNorm(4, KQ_FT_DIM),
+            nn.MaxPool2d(4),
             nn.ReLU(inplace=True),
         )
         self.fc_kq_ft2 = nn.Sequential(
-            nn.Conv2d(256, 32, 1, bias=False),
-            nn.GroupNorm(4, 32),
+            nn.Conv2d(256, KQ_FT_DIM, 1, bias=False),
+            nn.GroupNorm(4, KQ_FT_DIM),
+            nn.MaxPool2d(4),
             nn.ReLU(inplace=True),
         )
         self.fc_kq_ft3 = nn.Sequential(
-            nn.Conv2d(512, 32, 1, bias=False),
-            nn.GroupNorm(4, 32),
-            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+            nn.Conv2d(512, KQ_FT_DIM, 1, bias=False),
+            nn.GroupNorm(4, KQ_FT_DIM),
+            # nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+            nn.MaxPool2d(2),
             nn.ReLU(inplace=True),
         )
         self.fc_kq_ft4 = nn.Sequential(
-            nn.Conv2d(1024, 32, 1, bias=False),
-            nn.GroupNorm(4, 32),
-            nn.Upsample(scale_factor=4, mode='bilinear', align_corners=False),
+            nn.Conv2d(1024, KQ_FT_DIM, 1, bias=False),
+            nn.GroupNorm(4, KQ_FT_DIM),
+            # nn.Upsample(scale_factor=4, mode='bilinear', align_corners=False),
             nn.ReLU(inplace=True),
         )
         self.fc_kq_ft5 = nn.Sequential(
-            nn.Conv2d(2048, 32, 1, bias=False),
-            nn.GroupNorm(4, 32),
-            nn.Upsample(scale_factor=4, mode='bilinear', align_corners=False),
+            nn.Conv2d(2048, KQ_FT_DIM, 1, bias=False),
+            nn.GroupNorm(4, KQ_FT_DIM),
+            # nn.Upsample(scale_factor=4, mode='bilinear', align_corners=False),
             nn.ReLU(inplace=True),
         )
-        self.fc_kq_ft6 = nn.Conv2d(160, 1, 1, bias=True)
 
-        self.kq_dim = 16
         self.n_class = 20
-        self.kq = KQ(160, self.kq_dim)
-        self.bayes = Bayes(2048, self.kq_dim, n_class=self.n_class, n_heads=1, dif_pattern=[(3, 5)], rel_pattern=[(5, 3)])
-        self.gap = Gap(2048, self.n_class)
+        self.kq = KQ(5*KQ_FT_DIM, KQ_DIM)
+        self.feature = nn.Conv2d(2048,64,1)
+        self.bayes = Bayes(64, KQ_DIM, n_class=self.n_class, n_heads=1, dif_pattern=[(3, 5)], rel_pattern=[(5, 3)])
+        self.gap = Gap(64, self.n_class)
 
-        self.backbone = nn.ModuleList([self.stage1, self.stage2, self.stage3, self.stage4, self.fc_kq_ft1, self.fc_kq_ft2, self.fc_kq_ft3, self.fc_kq_ft4, self.fc_kq_ft5, self.fc_kq_ft6])
-        self.newly_added = nn.ModuleList([self.kq,self.bayes,self.gap])
+        self.backbone = nn.ModuleList([self.stage1, self.stage2, self.stage3, self.stage4, self.fc_kq_ft1, self.fc_kq_ft2, self.fc_kq_ft3, self.fc_kq_ft4, self.fc_kq_ft5])
+        self.newly_added = nn.ModuleList([self.feature, self.kq,self.bayes,self.gap])
 
     def forward(self, x, label):
 
@@ -64,28 +72,26 @@ class Net(nn.Module):
         x2 = self.stage2(x1).detach()
         x3 = self.stage3(x2).detach()
         x4 = self.stage4(x3)
-        x5 = self.stage5(x4)  # N, 2048, 32, 32
-
+        x5 = self.stage5(x4)  # N, 2048, KQ_FT_DIM, KQ_FT_DIM
+        # if isnan(x5):
+        #     import pdb;pdb.set_trace()
         kq_ft1 = self.fc_kq_ft1(x1)
         kq_ft2 = self.fc_kq_ft2(x2)
         kq_ft3 = self.fc_kq_ft3(x3)[..., :kq_ft2.size(2), :kq_ft2.size(3)]
         kq_ft4 = self.fc_kq_ft4(x4)[..., :kq_ft2.size(2), :kq_ft2.size(3)]
         kq_ft5 = self.fc_kq_ft5(x5)[..., :kq_ft2.size(2), :kq_ft2.size(3)]
-        kq_ft_up = self.fc_kq_ft6(torch.cat([kq_ft1, kq_ft2, kq_ft3, kq_ft4, kq_ft5], dim=1))
+        kq_ft_up = torch.cat([kq_ft1, kq_ft2, kq_ft3, kq_ft4, kq_ft5], dim=1)
         
+        # if isnan(kq_ft_up):
+        #     import pdb;pdb.set_trace()
+
         K,Q = self.kq(kq_ft_up)
-        import pdb 
-        pdb.set_trace()
-        feats1, preds1 = self.bayes(x5, K, Q, label)
+        feats = self.feature(x5)
+        feats1, preds1 = self.bayes(feats, K, Q, label)
         pred = self.gap(feats1, save_hm=True)
+        # if isnan(pred):
+        #     import pdb;pdb.set_trace()
         preds1.append(pred)
-
-        # x = torchutils.gap2d(x, keepdims=True) # N, 2048, 1, 1
-        # x = self.classifier(x) # N, 20, 32, 32
-
-        # x = torchutils.gap2d(x) # N, 20
-        
-        # x = x.view(-1, 20) # N, 20
 
         return preds1
 

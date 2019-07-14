@@ -2,12 +2,15 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from utils.tools import im2col_indices, col2im_indices
+from misc.torchutils import im2col_indices, col2im_indices
 if torch.cuda.is_available():
 	import torch.cuda as device
 else:
 	import torch as device
 import torch.nn.functional as F
+
+def isnan(x):
+    return torch.sum(x != x) > 0
 
 class Gap(nn.Module):
     def __init__(self, in_channels, n_class):
@@ -28,11 +31,15 @@ class Gap(nn.Module):
         return x
 
     def make_mask(self, label):
-        N, W, H, _ = self.heatmaps.shape
-        soft_mask = F.relu(self.heatmaps)
-        mask = torch.gather(soft_mask, 3, label[:, None, None, None].repeat(1, W, H, 1)).squeeze().detach() # (8, 81, 81)
-        mask_norm = (mask/torch.clamp(torch.max(mask.view(N, -1), dim=1)[0], 1.)[:, None, None]).unsqueeze(1)
-        return mask_norm
+        N, W, H, C = self.heatmaps.shape
+        soft_mask = F.relu(self.heatmaps.detach())
+        normed_mask = soft_mask/(torch.clamp(torch.max(soft_mask.view(N,W*H,C),dim=1)[0],1.)).view(N,1,1,C) # N,W,H,C
+        label_ext = label.view(N,1,1,C)
+        mask = torch.sum(normed_mask*label_ext,dim=3,keepdim=True)/(torch.clamp(torch.sum(label_ext,dim=3,keepdim=True), 1.)) # N,W,H,1
+        mask = mask.squeeze().unsqueeze(1) + 1e-5 # N,1,W,H
+        # mask = torch.gather(soft_mask, 3, label[:, None, None, None].repeat(1, W, H, 1)).squeeze().detach() # (8, 81, 81)
+        # mask_norm = (mask/torch.clamp(torch.max(mask.view(N, -1), dim=1)[0], 1.)[:, None, None]).unsqueeze(1)
+        return mask
 
 class LeakyLogGap(Gap):
     def __init__(self, in_channels, n_class):
@@ -110,7 +117,7 @@ class Diffusion(nn.Module):
         att_new = torch.clamp(att_new, 2.)
         return att_new
 
-    def forward(self, V, K, Q, ksize, dilation, mask):
+    def forward(self, V, K, Q, ksize, dilation):
         N, D, H, W = Q.shape # 8, 32, 124, 124
         Dv = V.shape[1]
         Hf = ksize
@@ -122,8 +129,8 @@ class Diffusion(nn.Module):
         tmp = (K_trans.view(D, -1, K_trans.shape[-1]) * Q_trans.unsqueeze(1)).view(self.n_heads, self.h_dim, Hf*Wf, -1)
         tmp = tmp.sum(1, True) # (4, 1, 5*5, 123008)
         self.att = torch.softmax(tmp, 2) # (4, 1, 25, 123008)
-        mask = mask.squeeze().permute(1, 2, 0).contiguous().view(-1)
-        self.att = self.att * mask[None, None, None, :] 
+        # mask = mask.squeeze().permute(1, 2, 0).contiguous().view(-1)
+        # self.att = self.att * mask[None, None, None, :] 
 
         V_trans = V.permute(1, 2, 3, 0).contiguous().view(self.n_heads, int(Dv/self.n_heads), 1, H*W*N) # (4, h_dim, 1, 123008)
         V_cols = (V_trans * self.att).view(Dv*Hf*Wf, -1) # (n_heads*h_dim*25, 123008)
@@ -153,11 +160,13 @@ class Bayes(nn.Module):
         feats_r = torch.stack(feats_r, dim=0).sum(0)
         pred_r = self.gap_r(feats_r)
 
-        for ksize, dilation in self.dif_pattern:
-            feats_d.append(self.diffuse(feats, K, Q, ksize, dilation, mask))
-        feats_d = torch.stack(feats_d, dim=0).sum(0)
-        nxt_feats = self.transform(torch.cat((feats*mask, feats_d), dim=1))
+        feats = feats * mask  # only discriminative features own the rights to diffuse! 
 
+        for ksize, dilation in self.dif_pattern:
+            feats_d.append(self.diffuse(feats, K, Q, ksize, dilation))
+        feats_d = torch.stack(feats_d, dim=0).sum(0)
+        nxt_feats = self.transform(torch.cat((feats, feats_d), dim=1))
+        
         return nxt_feats, [pred, pred_r]
 
         
