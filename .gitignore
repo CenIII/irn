@@ -123,6 +123,7 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+dataset
 dataset/
 sess/
 result/
