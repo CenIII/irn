@@ -4,7 +4,6 @@ import torch.nn.functional as F
 from misc import torchutils
 from net import resnet50
 
-
 class Net(nn.Module):
 
     def __init__(self):
@@ -34,7 +33,6 @@ class Net(nn.Module):
         # x = torchutils.gap2d(x, keepdims=True) # N, 2048, 1, 1
         x = self.classifier(x) # N, 20, 32, 32
 
-        x = torchutils.leaky_log(x)
         x = torchutils.gap2d(x) # N, 20
         
         x = x.view(-1, 20) # N, 20
@@ -69,7 +67,6 @@ class CAM(Net):
 
         x = F.conv2d(x, self.classifier.weight)
         x = F.relu(x)
-        # x = torchutils.leaky_log(x,leaky_rate=0.) #torch.log(1+F.relu(x))
         
         x = x[0] + x[1].flip(-1)
 

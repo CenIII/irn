@@ -75,7 +75,7 @@ def run(args):
             img = pack['img'].cuda()
             label = pack['label'].cuda(non_blocking=True)
 
-            x = model(img)
+            x = model(img, label)
             loss = F.multilabel_soft_margin_loss(x, label)
 
             avg_meter.add({'loss1': loss.item()})

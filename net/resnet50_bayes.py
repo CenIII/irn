@@ -1,0 +1,123 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from misc import torchutils
+from net import resnet50
+
+from .modules import Gap, KQ, Bayes
+
+class Net(nn.Module):
+
+    def __init__(self):
+        super(Net, self).__init__()
+
+        self.resnet50 = resnet50.resnet50(pretrained=True, strides=(2, 2, 2, 1))
+
+        self.stage1 = nn.Sequential(self.resnet50.conv1, self.resnet50.bn1, self.resnet50.relu, self.resnet50.maxpool)
+        self.stage2 = nn.Sequential(self.resnet50.layer1)
+        self.stage3 = nn.Sequential(self.resnet50.layer2)
+        self.stage4 = nn.Sequential(self.resnet50.layer3)
+        self.stage5 = nn.Sequential(self.resnet50.layer4)
+
+        self.fc_kq_ft1 = nn.Sequential(
+            nn.Conv2d(64, 32, 1, bias=False),
+            nn.GroupNorm(4, 32),
+            nn.ReLU(inplace=True),
+        )
+        self.fc_kq_ft2 = nn.Sequential(
+            nn.Conv2d(256, 32, 1, bias=False),
+            nn.GroupNorm(4, 32),
+            nn.ReLU(inplace=True),
+        )
+        self.fc_kq_ft3 = nn.Sequential(
+            nn.Conv2d(512, 32, 1, bias=False),
+            nn.GroupNorm(4, 32),
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+            nn.ReLU(inplace=True),
+        )
+        self.fc_kq_ft4 = nn.Sequential(
+            nn.Conv2d(1024, 32, 1, bias=False),
+            nn.GroupNorm(4, 32),
+            nn.Upsample(scale_factor=4, mode='bilinear', align_corners=False),
+            nn.ReLU(inplace=True),
+        )
+        self.fc_kq_ft5 = nn.Sequential(
+            nn.Conv2d(2048, 32, 1, bias=False),
+            nn.GroupNorm(4, 32),
+            nn.Upsample(scale_factor=4, mode='bilinear', align_corners=False),
+            nn.ReLU(inplace=True),
+        )
+        self.fc_kq_ft6 = nn.Conv2d(160, 1, 1, bias=True)
+
+        self.kq_dim = 16
+        self.n_class = 20
+        self.kq = KQ(160, self.kq_dim)
+        self.bayes = Bayes(2048, self.kq_dim, n_class=self.n_class, n_heads=1, dif_pattern=[(3, 5)], rel_pattern=[(5, 3)])
+        self.gap = Gap(2048, self.n_class)
+
+        self.backbone = nn.ModuleList([self.stage1, self.stage2, self.stage3, self.stage4, self.fc_kq_ft1, self.fc_kq_ft2, self.fc_kq_ft3, self.fc_kq_ft4, self.fc_kq_ft5, self.fc_kq_ft6])
+        self.newly_added = nn.ModuleList([self.kq,self.bayes,self.gap])
+
+    def forward(self, x, label):
+
+        x1 = self.stage1(x).detach()
+        x2 = self.stage2(x1).detach()
+        x3 = self.stage3(x2).detach()
+        x4 = self.stage4(x3)
+        x5 = self.stage5(x4)  # N, 2048, 32, 32
+
+        kq_ft1 = self.fc_kq_ft1(x1)
+        kq_ft2 = self.fc_kq_ft2(x2)
+        kq_ft3 = self.fc_kq_ft3(x3)[..., :kq_ft2.size(2), :kq_ft2.size(3)]
+        kq_ft4 = self.fc_kq_ft4(x4)[..., :kq_ft2.size(2), :kq_ft2.size(3)]
+        kq_ft5 = self.fc_kq_ft5(x5)[..., :kq_ft2.size(2), :kq_ft2.size(3)]
+        kq_ft_up = self.fc_kq_ft6(torch.cat([kq_ft1, kq_ft2, kq_ft3, kq_ft4, kq_ft5], dim=1))
+        
+        K,Q = self.kq(kq_ft_up)
+        import pdb 
+        pdb.set_trace()
+        feats1, preds1 = self.bayes(x5, K, Q, label)
+        pred = self.gap(feats1, save_hm=True)
+        preds1.append(pred)
+
+        # x = torchutils.gap2d(x, keepdims=True) # N, 2048, 1, 1
+        # x = self.classifier(x) # N, 20, 32, 32
+
+        # x = torchutils.gap2d(x) # N, 20
+        
+        # x = x.view(-1, 20) # N, 20
+
+        return preds1
+
+    def train(self, mode=True):
+        for p in self.resnet50.conv1.parameters():
+            p.requires_grad = False
+        for p in self.resnet50.bn1.parameters():
+            p.requires_grad = False
+
+    def trainable_parameters(self):
+
+        return (list(self.backbone.parameters()), list(self.newly_added.parameters()))
+
+
+class CAM(Net):
+
+    def __init__(self):
+        super(CAM, self).__init__()
+
+    def forward(self, x):
+
+        x = self.stage1(x)
+
+        x = self.stage2(x)
+
+        x = self.stage3(x)
+
+        x = self.stage4(x)
+
+        x = F.conv2d(x, self.classifier.weight)
+        x = F.relu(x)
+        
+        x = x[0] + x[1].flip(-1)
+
+        return x
