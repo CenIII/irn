@@ -25,7 +25,7 @@ def validate(model, data_loader):
             label = pack['label'].cuda(non_blocking=True)
 
             x = model(img,label)
-            loss1 = F.multilabel_soft_margin_loss(x, label)
+            loss1 = torchutils.batch_multilabel_loss(x, label)
 
             val_loss_meter.add({'loss1': loss1.item()})
 

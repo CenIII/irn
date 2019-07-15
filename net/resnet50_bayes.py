@@ -79,7 +79,7 @@ class Net(nn.Module):
         kq_ft_up = torch.cat([kq_ft1, kq_ft2, kq_ft3, kq_ft4, kq_ft5], dim=1)
 
         K,Q = self.kq(kq_ft_up)
-        feats = self.feature(x5)
+        feats = self.feature(x5)[..., :kq_ft2.size(2), :kq_ft2.size(3)]
         feats1, preds1 = self.bayes(feats, K, Q, label)
         pred = self.gap(feats1, save_hm=True)
 
@@ -103,18 +103,28 @@ class CAM(Net):
     def __init__(self):
         super(CAM, self).__init__()
 
-    def forward(self, x):
+    def forward(self, x, label):
 
-        x = self.stage1(x)
+        x1 = self.stage1(x).detach()
+        x2 = self.stage2(x1).detach()
+        x3 = self.stage3(x2).detach()
+        x4 = self.stage4(x3)
+        x5 = self.stage5(x4)  # N, 2048, KQ_FT_DIM, KQ_FT_DIM
 
-        x = self.stage2(x)
+        kq_ft1 = self.fc_kq_ft1(x1)
+        kq_ft2 = self.fc_kq_ft2(x2)
+        kq_ft3 = self.fc_kq_ft3(x3)[..., :kq_ft2.size(2), :kq_ft2.size(3)]
+        kq_ft4 = self.fc_kq_ft4(x4)[..., :kq_ft2.size(2), :kq_ft2.size(3)]
+        kq_ft5 = self.fc_kq_ft5(x5)[..., :kq_ft2.size(2), :kq_ft2.size(3)]
+        kq_ft_up = torch.cat([kq_ft1, kq_ft2, kq_ft3, kq_ft4, kq_ft5], dim=1)
 
-        x = self.stage3(x)
+        K,Q = self.kq(kq_ft_up)
+        feats = self.feature(x5)[..., :kq_ft2.size(2), :kq_ft2.size(3)]
+        feats1, preds1 = self.bayes(feats, K, Q, label)
+        pred = self.gap(feats1, save_hm=True)
 
-        x = self.stage4(x)
-
-        x = F.conv2d(x, self.classifier.weight)
-        x = F.relu(x)
+        # x = F.conv2d(x, self.classifier.weight)
+        x = F.relu(self.gap.heatmaps.permute(0,3,1,2))
         
         x = x[0] + x[1].flip(-1)
 

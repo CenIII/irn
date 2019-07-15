@@ -32,8 +32,7 @@ def _work(process_id, model, dataset, args):
             strided_size = imutils.get_strided_size(size, 4)
             strided_up_size = imutils.get_strided_up_size(size, 16)
 
-            import pdb;pdb.set_trace()
-            outputs = [model(img[0].cuda(non_blocking=True))
+            outputs = [model(img[0].cuda(non_blocking=True),label.view(1,-1).repeat(2,1).cuda(non_blocking=True))
                        for img in pack['img']]
 
             strided_cam = torch.sum(torch.stack(
@@ -74,5 +73,5 @@ def run(args):
     print('[ ', end='')
     multiprocessing.spawn(_work, nprocs=n_gpus, args=(model, dataset, args), join=True)
     print(']')
-
+    # _work(0,model,dataset,args)
     torch.cuda.empty_cache()
