@@ -25,17 +25,17 @@ class Net(nn.Module):
 
     def forward(self, x):
 
-        x = self.stage1(x)
+        x = self.stage1(x).detach()
         x = self.stage2(x).detach()
 
-        x = self.stage3(x)
-        x = self.stage4(x)  # N, 2048, 32, 32
+        x = self.stage3(x).detach()
+        x = self.stage4(x).detach()  # N, 2048, 32, 32
 
-        # x = torchutils.gap2d(x, keepdims=True) # N, 2048, 1, 1
+        x = torchutils.gap2d(x, keepdims=True) # N, 2048, 1, 1
         x = self.classifier(x) # N, 20, 32, 32
 
-        x = torchutils.leaky_log(x)
-        x = torchutils.gap2d(x) # N, 20
+        # x = torchutils.leaky_log(x)
+        # x = torchutils.gap2d(x) # N, 20
         
         x = x.view(-1, 20) # N, 20
 

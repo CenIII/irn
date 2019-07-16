@@ -124,6 +124,7 @@ dmypy.json
 .pyre/
 
 dataset/
+dataset
 sess/
 result/
 exp
