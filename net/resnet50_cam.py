@@ -17,7 +17,7 @@ class Net(nn.Module):
         self.stage2 = nn.Sequential(self.resnet50.layer2)
         self.stage3 = nn.Sequential(self.resnet50.layer3)
         self.stage4 = nn.Sequential(self.resnet50.layer4)
-
+        self.dilated = nn.Conv2d(2048,2048,3,dilation=6)
         self.classifier = nn.Conv2d(2048, 20, 1, bias=False)
 
         self.backbone = nn.ModuleList([self.stage1, self.stage2, self.stage3, self.stage4])
@@ -31,11 +31,9 @@ class Net(nn.Module):
         x = self.stage3(x)
         x = self.stage4(x)  # N, 2048, 32, 32
 
-        # x = torchutils.gap2d(x, keepdims=True) # N, 2048, 1, 1
+        x = self.dilated(x)
+        x = torchutils.gap2d(x, keepdims=True) # N, 2048, 1, 1
         x = self.classifier(x) # N, 20, 32, 32
-
-        x = torchutils.leaky_log(x)
-        x = torchutils.gap2d(x) # N, 20
         
         x = x.view(-1, 20) # N, 20
 
@@ -67,9 +65,10 @@ class CAM(Net):
 
         x = self.stage4(x)
 
+        x = self.dilated(x)
+
         x = F.conv2d(x, self.classifier.weight)
         x = F.relu(x)
-        # x = torchutils.leaky_log(x,leaky_rate=0.) #torch.log(1+F.relu(x))
         
         x = x[0] + x[1].flip(-1)
 
