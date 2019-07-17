@@ -17,11 +17,14 @@ class Net(nn.Module):
         self.stage2 = nn.Sequential(self.resnet50.layer2)
         self.stage3 = nn.Sequential(self.resnet50.layer3)
         self.stage4 = nn.Sequential(self.resnet50.layer4)
-        self.dilated = nn.Conv2d(2048,2048,3,dilation=6)
+        self.dilated = nn.Sequential(nn.Conv2d(2048,2048,3,dilation=6,padding=6,bias=False),
+                                    nn.GroupNorm(16,2048),
+                                    nn.ReLU(inplace=True)
+                                    )
         self.classifier = nn.Conv2d(2048, 20, 1, bias=False)
 
         self.backbone = nn.ModuleList([self.stage1, self.stage2, self.stage3, self.stage4])
-        self.newly_added = nn.ModuleList([self.classifier])
+        self.newly_added = nn.ModuleList([self.classifier,self.dilated])
 
     def forward(self, x):
 
