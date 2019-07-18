@@ -18,7 +18,10 @@ class Net(nn.Module):
         self.stage3 = nn.Sequential(self.resnet50.layer3)
         self.stage4 = nn.Sequential(self.resnet50.layer4)
 
-        self.conv = nn.Conv2d(2048,64,(3,3),padding=1)
+        self.conv = nn.Sequential(nn.Conv2d(2048,64,1,bias=False),
+                                    nn.GroupNorm(4, 64),
+                                    nn.ReLU(inplace=True)
+                                )
         self.classifier = nn.Conv2d(64, 20, 1, bias=False)
 
         self.backbone = nn.ModuleList([self.stage1, self.stage2, self.stage3, self.stage4])

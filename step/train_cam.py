@@ -10,6 +10,7 @@ import importlib
 import voc12.dataloader
 from misc import pyutils, torchutils
 
+from torch import autograd
 
 def validate(model, data_loader):
     print('validating ... ', flush=True, end='')
@@ -79,10 +80,10 @@ def run(args):
             loss = F.multilabel_soft_margin_loss(x, label)
 
             avg_meter.add({'loss1': loss.item()})
-
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+            with autograd.detect_anomaly():
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
 
             if (optimizer.global_step-1)%100 == 0:
                 timer.update_progress(optimizer.global_step / max_step)
