@@ -21,7 +21,7 @@ class Net(nn.Module):
         self.classifier = nn.Conv2d(2048, 20, 1, bias=False)
         self.saliency_classifier = nn.Conv2d(2048, 1, 1, bias=False)
         self.backbone = nn.ModuleList([self.stage1, self.stage2, self.stage3, self.stage4])
-        self.newly_added = nn.ModuleList([self.classifier])
+        self.newly_added = nn.ModuleList([self.classifier, self.saliency_classifier])
 
     def forward(self, x):
 
