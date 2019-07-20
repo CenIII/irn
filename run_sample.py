@@ -41,12 +41,12 @@ if __name__ == '__main__':
     parser.add_argument("--cam_network", default="net.resnet50_rel", type=str)
     parser.add_argument("--cam_crop_size", default=512, type=int)
     parser.add_argument("--cam_batch_size", required=True, type=int)
-    parser.add_argument("--cam_num_epoches", default=5, type=int)
+    parser.add_argument("--cam_num_epoches", default=20, type=int)
     parser.add_argument("--cam_learning_rate", required=True, type=float)
     parser.add_argument("--cam_weight_decay", default=1e-4, type=float)
     parser.add_argument("--cam_eval_thres", default=0.15, type=float)
     parser.add_argument("--cam_scales", default=(1.0, 0.5, 1.5, 2.0))
-
+    parser.add_argument("--cam_visualize_train", default=False)
     # Mining Inter-pixel Relations
     parser.add_argument("--conf_fg_thres", default=0.30, type=float)
     parser.add_argument("--conf_bg_thres", default=0.05, type=float)

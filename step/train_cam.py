@@ -10,111 +10,124 @@ import importlib
 import voc12.dataloader
 from misc import pyutils, torchutils
 from torch import autograd
-    
+import matplotlib
+# matplotlib.use('tkagg')
+import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+import numpy as np 
+	
 def validate(model, data_loader):
-    print('validating ... ', flush=True, end='')
+	print('validating ... ', flush=True, end='')
 
-    val_loss_meter = pyutils.AverageMeter('loss1', 'loss2')
+	val_loss_meter = pyutils.AverageMeter('loss1', 'loss2')
 
-    model.eval()
+	model.eval()
 
-    with torch.no_grad():
-        for pack in data_loader:
-            img = pack['img']
+	with torch.no_grad():
+		for pack in data_loader:
+			img = pack['img']
 
-            label = pack['label'].cuda(non_blocking=True)
+			label = pack['label'].cuda(non_blocking=True)
 
-            x = model(img,label)
-            loss1 = torchutils.batch_multilabel_loss(x, label)
+			x = model(img,label)
+			loss1 = torchutils.batch_multilabel_loss(x, label)
 
-            val_loss_meter.add({'loss1': loss1.item()})
+			val_loss_meter.add({'loss1': loss1.item()})
 
-    model.train()
+	model.train()
 
-    print('loss: %.4f' % (val_loss_meter.pop('loss1')))
+	print('loss: %.4f' % (val_loss_meter.pop('loss1')))
 
-    return
+	return
 
-def visualize(x, net, label, fig, ax, cb, iterno):
-    x = x[0]
-	hm = net.getHeatmaps(label)
+def visualize(x, net, hms, label, fig, ax, cb, iterno, img_denorm):
+	# import pdb;pdb.set_trace()
+	x = img_denorm(x[0].permute(1,2,0).data.cpu().numpy()).astype(np.int32)
+	hm = net.getHeatmaps(hms, label.max(dim=1)[1])
 	# plot here
-    img = ax[0][0].imshow(x.data.cpu().numpy())
-	for i in range(len(ax[0])-1):
-		img = ax[0][i+1].imshow(hm[i][0].data.cpu().numpy())
-		if cb[0][i+1] is not None:
-			cb[0][i+1].remove()
-		cb[0][i+1] = plt.colorbar(img, ax=ax[0][i+1])
-
-    fig.suptitle('iteration '+str(iterno))
-	plt.pause(0.02)
+	img = ax[0].imshow(x)
+	for i in range(len(ax)-1):
+		img = ax[i+1].imshow(hm[i][0].data.cpu().numpy())
+		if cb[i+1] is not None:
+			cb[i+1].remove()
+		
+		divider = make_axes_locatable(ax[i+1])
+		cax = divider.append_axes("right", size="5%", pad=0.05)
+		cb[i+1] = plt.colorbar(img, cax=cax)
+		# cb[i+1] = plt.colorbar(img, ax=ax[i+1])
+	
+	fig.suptitle('iteration '+str(iterno))
+	
+	# plt.pause(0.02)
+	plt.savefig('visual_train.png')
 	return cb
 
 def run(args):
 
-    model = getattr(importlib.import_module(args.cam_network), 'Net')()
+	model = getattr(importlib.import_module(args.cam_network), 'Net')()
 
 
-    train_dataset = voc12.dataloader.VOC12ClassificationDataset(args.train_list, voc12_root=args.voc12_root,
-                                                                resize_long=(320, 640), hor_flip=True,
-                                                                crop_size=512, crop_method="random")
-    train_data_loader = DataLoader(train_dataset, batch_size=args.cam_batch_size,
-                                   shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=True)
-    max_step = (len(train_dataset) // args.cam_batch_size) * args.cam_num_epoches
+	train_dataset = voc12.dataloader.VOC12ClassificationDataset(args.train_list, voc12_root=args.voc12_root,
+																resize_long=(320, 640), hor_flip=True,
+																crop_size=512, crop_method="random")
+	train_data_loader = DataLoader(train_dataset, batch_size=args.cam_batch_size,
+								   shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=True)
+	max_step = (len(train_dataset) // args.cam_batch_size) * args.cam_num_epoches
 
-    val_dataset = voc12.dataloader.VOC12ClassificationDataset(args.val_list, voc12_root=args.voc12_root,
-                                                              crop_size=512)
-    val_data_loader = DataLoader(val_dataset, batch_size=args.cam_batch_size,
-                                 shuffle=False, num_workers=args.num_workers, pin_memory=True, drop_last=True)
+	val_dataset = voc12.dataloader.VOC12ClassificationDataset(args.val_list, voc12_root=args.voc12_root,
+															  crop_size=512)
+	val_data_loader = DataLoader(val_dataset, batch_size=args.cam_batch_size,
+								 shuffle=False, num_workers=args.num_workers, pin_memory=True, drop_last=True)
 
-    param_groups = model.trainable_parameters()
-    optimizer = torchutils.PolyOptimizer([
-        {'params': param_groups[0], 'lr': args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
-        {'params': param_groups[1], 'lr': 10*args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
-    ], lr=args.cam_learning_rate, weight_decay=args.cam_weight_decay, max_step=max_step)
+	param_groups = model.trainable_parameters()
+	optimizer = torchutils.PolyOptimizer([
+		{'params': param_groups[0], 'lr': args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
+		{'params': param_groups[1], 'lr': args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
+	], lr=args.cam_learning_rate, weight_decay=args.cam_weight_decay, max_step=max_step)
 
-    model = model.cuda() #torch.nn.DataParallel(model).cuda()
-    model.train()
+	model = torch.nn.DataParallel(model).cuda()
+	model.train()
 
-    avg_meter = pyutils.AverageMeter()
+	avg_meter = pyutils.AverageMeter()
 
-    timer = pyutils.Timer()
+	timer = pyutils.Timer()
 
-    fig, ax = plt.subplots(nrows=1, ncols=3)
-    cb = [[None, None, None]]
+	fig, ax = plt.subplots(nrows=1, ncols=3)
+	cb = [None, None, None]
+	img_denorm = torchutils.ImageDenorm()
 
-    for ep in range(args.cam_num_epoches):
+	for ep in range(args.cam_num_epoches):
 
-        print('Epoch %d/%d' % (ep+1, args.cam_num_epoches))
+		print('Epoch %d/%d' % (ep+1, args.cam_num_epoches))
 
-        for step, pack in enumerate(train_data_loader):
+		for step, pack in enumerate(train_data_loader):
 
-            img = pack['img'].cuda()
-            label = pack['label'].cuda(non_blocking=True)
+			img = pack['img'].cuda()
+			label = pack['label'].cuda(non_blocking=True)
 
-            preds, pred0 = model(img)
-            if (optimizer.global_step-1)%50 == 0:
-                visualize(img, model, label, fig, ax, cb, optimizer.global_step-1)
-            loss = torchutils.batch_multilabel_loss(preds, label, mean=True)
-            loss += F.multilabel_soft_margin_loss(pred0, label)
-            avg_meter.add({'loss1': loss.item()})
-            with autograd.detect_anomaly():
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
+			preds, pred0, hms = model(img)
+			if (optimizer.global_step-1)%10 == 0 and args.cam_visualize_train:
+				visualize(img, model.module, hms, label, fig, ax, cb, optimizer.global_step-1, img_denorm)
+			loss = torchutils.batch_multilabel_loss(preds, label, mean=True)
+			loss += F.multilabel_soft_margin_loss(pred0, label)
+			avg_meter.add({'loss1': loss.item()})
+			with autograd.detect_anomaly():
+				optimizer.zero_grad()
+				loss.backward()
+				optimizer.step()
 
-            if (optimizer.global_step-1)%100 == 0:
-                timer.update_progress(optimizer.global_step / max_step)
+			if (optimizer.global_step-1)%100 == 0:
+				timer.update_progress(optimizer.global_step / max_step)
 
-                print('step:%5d/%5d' % (optimizer.global_step - 1, max_step),
-                      'loss:%.4f' % (avg_meter.pop('loss1')),
-                      'imps:%.1f' % ((step + 1) * args.cam_batch_size / timer.get_stage_elapsed()),
-                      'lr: %.4f' % (optimizer.param_groups[0]['lr']),
-                      'etc:%s' % (timer.str_estimated_complete()), flush=True)
+				print('step:%5d/%5d' % (optimizer.global_step - 1, max_step),
+					  'loss:%.4f' % (avg_meter.pop('loss1')),
+					  'imps:%.1f' % ((step + 1) * args.cam_batch_size / timer.get_stage_elapsed()),
+					  'lr: %.4f' % (optimizer.param_groups[0]['lr']),
+					  'etc:%s' % (timer.str_estimated_complete()), flush=True)
 
-        else:
-            validate(model, val_data_loader)
-            timer.reset_stage()
+		else:
+			validate(model, val_data_loader)
+			timer.reset_stage()
 
-    torch.save(model.module.state_dict(), args.cam_weights_name + '.pth')
-    torch.cuda.empty_cache()
+	torch.save(model.module.state_dict(), args.cam_weights_name + '.pth')
+	torch.cuda.empty_cache()

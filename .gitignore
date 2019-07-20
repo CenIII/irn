@@ -130,3 +130,4 @@ result/
 exp
 exp/
 .vscode/
+*.png
