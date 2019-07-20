@@ -35,6 +35,20 @@ def validate(model, data_loader):
 
     return
 
+def visualize(x, net, label, fig, ax, cb, iterno):
+    x = x[0]
+	hm = net.getHeatmaps(label)
+	# plot here
+    img = ax[0][0].imshow(x.data.cpu().numpy())
+	for i in range(len(ax[0])-1):
+		img = ax[0][i+1].imshow(hm[i][0].data.cpu().numpy())
+		if cb[0][i+1] is not None:
+			cb[0][i+1].remove()
+		cb[0][i+1] = plt.colorbar(img, ax=ax[0][i+1])
+
+    fig.suptitle('iteration '+str(iterno))
+	plt.pause(0.02)
+	return cb
 
 def run(args):
 
@@ -59,12 +73,15 @@ def run(args):
         {'params': param_groups[1], 'lr': 10*args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
     ], lr=args.cam_learning_rate, weight_decay=args.cam_weight_decay, max_step=max_step)
 
-    model = torch.nn.DataParallel(model).cuda()
+    model = model.cuda() #torch.nn.DataParallel(model).cuda()
     model.train()
 
     avg_meter = pyutils.AverageMeter()
 
     timer = pyutils.Timer()
+
+    fig, ax = plt.subplots(nrows=1, ncols=3)
+    cb = [[None, None, None]]
 
     for ep in range(args.cam_num_epoches):
 
@@ -75,8 +92,11 @@ def run(args):
             img = pack['img'].cuda()
             label = pack['label'].cuda(non_blocking=True)
 
-            x = model(img, label)
-            loss = torchutils.batch_multilabel_loss(x, label)
+            preds, pred0 = model(img)
+            if (optimizer.global_step-1)%50 == 0:
+                visualize(img, model, label, fig, ax, cb, optimizer.global_step-1)
+            loss = torchutils.batch_multilabel_loss(preds, label, mean=True)
+            loss += F.multilabel_soft_margin_loss(pred0, label)
             avg_meter.add({'loss1': loss.item()})
             with autograd.detect_anomaly():
                 optimizer.zero_grad()

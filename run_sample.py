@@ -38,7 +38,7 @@ if __name__ == '__main__':
     parser.add_argument("--chainer_eval_set", default="train", type=str)
 
     # Class Activation Map
-    parser.add_argument("--cam_network", default="net.resnet50_bayes", type=str)
+    parser.add_argument("--cam_network", default="net.resnet50_rel", type=str)
     parser.add_argument("--cam_crop_size", default=512, type=int)
     parser.add_argument("--cam_batch_size", required=True, type=int)
     parser.add_argument("--cam_num_epoches", default=5, type=int)

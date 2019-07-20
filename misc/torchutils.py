@@ -83,12 +83,14 @@ def leaky_log(x, leaky_rate=0.2):
     hm_lky = hm - leaky_rate * F.relu(-x)
     return hm_lky
 
-def batch_multilabel_loss(preds, label):
+def batch_multilabel_loss(preds, label, mean=False):
     loss = []
     for pred in preds:
         loss.append(F.multilabel_soft_margin_loss(pred, label))
-    loss = sum(loss)
-    return loss 
+    ret = sum(loss)
+    if mean:
+        ret = ret/len(loss)
+    return ret 
 
 def get_im2col_indices(x_shape, field_height, field_width, padding=1, stride=1, dilate=1):
     # First figure out what the size of the output should be

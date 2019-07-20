@@ -1,1 +1,1 @@
-from .bayes import Gap, LeakyLogGap, Infusion, Diffusion, Bayes, KQ
+from .relation import Gap, LeakyLogGap, Infusion, Diffusion, Relation, KQ
