@@ -32,8 +32,9 @@ class Net(nn.Module):
         self.gap = Gap(2048, self.n_class)
         self.relation = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=1, rel_pattern=[(3,3),(3,2),(5,2)]) #,(5,5)
         
-        self.backbone = nn.ModuleList([self.stage1, self.stage2, self.stage3, self.stage4, self.stage5])
-        self.newly_added = nn.ModuleList([self.branch_rel, self.kq, self.relation, self.gap])
+        self.backbone = nn.ModuleList([self.stage4, self.stage5]) #self.stage1, self.stage2, self.stage3, 
+        self.convs = nn.ModuleList([self.branch_rel, self.kq])
+        self.leaf_gaps = nn.ModuleList([self.gap])
 
     def forward(self, x):
 
@@ -72,8 +73,7 @@ class Net(nn.Module):
             p.requires_grad = False
 
     def trainable_parameters(self):
-
-        return (list(self.backbone.parameters()), list(self.newly_added.parameters()))
+        return (list(self.backbone.parameters()), list(self.convs.parameters()), list(self.leaf_gaps.parameters()))
 
 
 class CAM(Net):

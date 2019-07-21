@@ -15,6 +15,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np 
+from torch.nn.utils import clip_grad_norm_
 	
 def validate(model, data_loader):
 	print('validating ... ', flush=True, end='')
@@ -29,8 +30,11 @@ def validate(model, data_loader):
 
 			label = pack['label'].cuda(non_blocking=True)
 
-			x = model(img,label)
-			loss1 = torchutils.batch_multilabel_loss(x, label)
+			# x = model(img)
+			# loss1 = torchutils.batch_multilabel_loss(x, label)
+			preds, pred0, hms = model(img)
+			loss = torchutils.batch_multilabel_loss(preds, label, mean=True)
+			loss += F.multilabel_soft_margin_loss(pred0, label)
 
 			val_loss_meter.add({'loss1': loss1.item()})
 
@@ -59,7 +63,7 @@ def visualize(x, net, hms, label, fig, ax, cb, iterno, img_denorm):
 	fig.suptitle('iteration '+str(iterno))
 	
 	# plt.pause(0.02)
-	plt.savefig('visual_train.png')
+	plt.savefig('visual_train_'+str(iterno)+'.png')
 	return cb
 
 def run(args):
@@ -83,6 +87,7 @@ def run(args):
 	optimizer = torchutils.PolyOptimizer([
 		{'params': param_groups[0], 'lr': args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
 		{'params': param_groups[1], 'lr': args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
+		{'params': param_groups[2], 'lr': 10*args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
 	], lr=args.cam_learning_rate, weight_decay=args.cam_weight_decay, max_step=max_step)
 
 	model = torch.nn.DataParallel(model).cuda()
@@ -114,6 +119,9 @@ def run(args):
 			with autograd.detect_anomaly():
 				optimizer.zero_grad()
 				loss.backward()
+				# import pdb;pdb.set_trace()
+				# print(torch.max(model.module.gap.lin.weight.grad))
+				clip_grad_norm_(model.parameters(), 1.)
 				optimizer.step()
 
 			if (optimizer.global_step-1)%100 == 0:
@@ -126,6 +134,7 @@ def run(args):
 					  'etc:%s' % (timer.str_estimated_complete()), flush=True)
 
 		else:
+			torch.save(model.module.state_dict(), args.cam_weights_name + '.pth')
 			validate(model, val_data_loader)
 			timer.reset_stage()
 

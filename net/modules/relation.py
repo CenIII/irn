@@ -87,10 +87,10 @@ class Infusion(nn.Module):
         K_trans = im2col_indices(K, Hf, Wf, padding, 1, dilation) # (3200, 38440)
         Q_trans = Q.permute(1, 2, 3, 0).contiguous().view(self.n_heads, self.h_dim, -1) # (128, 38440)
         tmp = (K_trans.view(self.n_heads, self.h_dim, -1, K_trans.shape[-1]) - Q_trans.unsqueeze(2)).view(self.n_heads, self.h_dim, Hf*Wf, -1)
-        tmp = torch.pow(tmp,2).sum(1, True)/np.sqrt(self.h_dim) # (4, 1, 5*5, 38440) 
-        att = torch.softmax(-tmp, 2) # (4, 1, 25, 38440)
+        tmp = torch.pow(tmp,2).sum(1, True)/(np.sqrt(self.h_dim+1e-5)+1e-5) # (4, 1, 5*5, 38440) 
+        att = torch.softmax(-tmp+1e-5, 2) # (4, 1, 25, 38440)
         V_trans = im2col_indices(V, Hf, Wf, padding, 1, dilation).view(1, self.v_dim, Hf*Wf, -1)
-        out = (V_trans * att).sum(2).sum(0).view(D, H, W, N).permute(3, 0, 1, 2)/self.n_heads
+        out = (V_trans * att).sum(2).sum(0).view(D, H, W, N).permute(3, 0, 1, 2)/(self.n_heads+1e-5)
         return out
 
 class Diffusion(nn.Module):
