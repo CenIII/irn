@@ -86,7 +86,7 @@ def run(args):
 	param_groups = model.trainable_parameters()
 	optimizer = torchutils.PolyOptimizer([
 		{'params': param_groups[0], 'lr': args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
-		{'params': param_groups[1], 'lr': args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
+		{'params': param_groups[1], 'lr': 10*args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
 		{'params': param_groups[2], 'lr': 10*args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
 	], lr=args.cam_learning_rate, weight_decay=args.cam_weight_decay, max_step=max_step)
 

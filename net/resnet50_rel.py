@@ -7,7 +7,7 @@ from net import resnet50
 from .modules import Gap, KQ, Relation
 
 KQ_FT_DIM = 32
-KQ_DIM = 16
+KQ_DIM = 32
 
 class Net(nn.Module):
 
@@ -22,18 +22,44 @@ class Net(nn.Module):
         self.stage4 = nn.Sequential(self.resnet50.layer3)
         self.stage5 = nn.Sequential(self.resnet50.layer4)
 
-        self.branch_rel = nn.Sequential(
-            nn.Conv2d(1024, 1024, 1),
+        # self.branch_rel = nn.Sequential(
+        #     nn.Conv2d(1024, 1024, 1),
+        # )
+        # branch: class boundary detection
+        self.fc_edge1 = nn.Sequential(
+            # nn.Conv2d(64, 64, 1, bias=False),
+            # nn.GroupNorm(4, 32),
+            nn.MaxPool2d(2),
+            # nn.ReLU(inplace=True),
+        )
+        self.fc_edge2 = nn.Sequential(
+            # nn.Conv2d(256, 128, 1, bias=False),
+            # nn.GroupNorm(4, 32),
+            nn.MaxPool2d(2)
+            # nn.ReLU(inplace=True),
+        )
+        # self.fc_edge3 = nn.Sequential(
+        #     # nn.Conv2d(512, 256, 1, bias=False),
+        #     # nn.GroupNorm(4, 32),
+        #     # nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+        #     # nn.ReLU(inplace=True),
+        # )
+        self.fc_edge4 = nn.Sequential(
+            # nn.Conv2d(1024, 512, 1, bias=False),
+            # nn.GroupNorm(4, 32),
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+            # nn.ReLU(inplace=True),
         )
 
         self.n_class = 20
-        self.kq = KQ(1024, KQ_DIM)
+        self.kq = KQ(2048, KQ_DIM)
         
         self.gap = Gap(2048, self.n_class)
-        self.relation = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=1, rel_pattern=[(3,3),(3,2),(5,2)]) #,(5,5)
+        self.upscale_cam = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
+        self.relation = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=1, rel_pattern=[(3,3),(5,2),(5,3)]) #,(5,5)
         
         self.backbone = nn.ModuleList([self.stage4, self.stage5]) #self.stage1, self.stage2, self.stage3, 
-        self.convs = nn.ModuleList([self.branch_rel, self.kq])
+        self.convs = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge4, self.kq])
         self.leaf_gaps = nn.ModuleList([self.gap])
 
     def forward(self, x):
@@ -43,10 +69,16 @@ class Net(nn.Module):
         x3 = self.stage3(x2).detach()
         x4 = self.stage4(x3)
         feats_loc = self.stage5(x4)  # N, 2048, KQ_FT_DIM, KQ_FT_DIM
-        feats_rel = self.branch_rel(x4)
+
+        edge1 = self.fc_edge1(x1)
+        edge2 = self.fc_edge2(x2)
+        edge3 = x3[..., :edge2.size(2), :edge2.size(3)]
+        edge4 = self.fc_edge4(x4)[..., :edge2.size(2), :edge2.size(3)]
+        feats_rel = torch.cat([edge1, edge2, edge3, edge4], dim=1)
 
         K, Q = self.kq(feats_rel)
         pred0, cam0 = self.gap(feats_loc)
+        cam0 = self.upscale_cam(cam0)
         pred1, cam1 = self.relation(cam0, K, Q)
 
         hms = self.save_hm(cam0, cam1)

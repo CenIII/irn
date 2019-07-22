@@ -59,6 +59,8 @@ class KQ(nn.Module):
             nn.Conv2d(kq_dim, kq_dim, (1, 1)), 
             nn.ReLU(), 
             nn.Conv2d(kq_dim, kq_dim, (1, 1)), 
+            nn.ReLU(), 
+            nn.Conv2d(kq_dim, kq_dim, (1, 1)), 
             )
         self.q = nn.Sequential(
             nn.Conv2d(in_channels, kq_dim, (1, 1)), 
