@@ -52,7 +52,7 @@ class Net(nn.Module):
         )
 
         self.n_class = 20
-        self.kq = KQ(2048, KQ_DIM)
+        self.kq = KQ(1856, KQ_DIM)
         
         self.gap = Gap(2048, self.n_class)
         self.upscale_cam = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
@@ -113,7 +113,7 @@ class CAM(Net):
     def __init__(self):
         super(CAM, self).__init__()
 
-    def forward(self, x, label):
+    def forward(self, x):
         x1 = self.stage1(x).detach()
         x2 = self.stage2(x1).detach()
         x3 = self.stage3(x2).detach()

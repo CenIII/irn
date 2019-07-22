@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np 
 from torch.nn.utils import clip_grad_norm_
+import os
 	
 def validate(model, data_loader):
 	print('validating ... ', flush=True, end='')
@@ -44,7 +45,7 @@ def validate(model, data_loader):
 
 	return
 
-def visualize(x, net, hms, label, fig, ax, cb, iterno, img_denorm):
+def visualize(x, net, hms, label, fig, ax, cb, iterno, img_denorm, savepath):
 	# import pdb;pdb.set_trace()
 	x = img_denorm(x[0].permute(1,2,0).data.cpu().numpy()).astype(np.int32)
 	hm = net.getHeatmaps(hms, label.max(dim=1)[1])
@@ -63,7 +64,7 @@ def visualize(x, net, hms, label, fig, ax, cb, iterno, img_denorm):
 	fig.suptitle('iteration '+str(iterno))
 	
 	# plt.pause(0.02)
-	plt.savefig('visual_train_'+str(iterno)+'.png')
+	plt.savefig(os.path.join(savepath, 'visual_train_'+str(iterno)+'.png'))
 	return cb
 
 def run(args):
@@ -112,7 +113,7 @@ def run(args):
 
 			preds, pred0, hms = model(img)
 			if (optimizer.global_step-1)%10 == 0 and args.cam_visualize_train:
-				visualize(img, model.module, hms, label, fig, ax, cb, optimizer.global_step-1, img_denorm)
+				visualize(img, model.module, hms, label, fig, ax, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir)
 			loss = torchutils.batch_multilabel_loss(preds, label, mean=True)
 			loss += F.multilabel_soft_margin_loss(pred0, label)
 			avg_meter.add({'loss1': loss.item()})
