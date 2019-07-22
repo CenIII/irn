@@ -33,8 +33,8 @@ def validate(model, data_loader):
 			# x = model(img)
 			# loss1 = torchutils.batch_multilabel_loss(x, label)
 			preds, pred0, hms = model(img)
-			loss = torchutils.batch_multilabel_loss(preds, label, mean=True)
-			loss += F.multilabel_soft_margin_loss(pred0, label)
+			loss1 = torchutils.batch_multilabel_loss(preds, label, mean=True)
+			loss1 += F.multilabel_soft_margin_loss(pred0, label)
 
 			val_loss_meter.add({'loss1': loss1.item()})
 
