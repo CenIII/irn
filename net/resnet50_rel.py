@@ -56,7 +56,7 @@ class Net(nn.Module):
         
         self.gap = Gap(2048, self.n_class)
         self.upscale_cam = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
-        self.relation = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=1, rel_pattern=[(3,3),(5,2),(5,3)]) #,(5,5)
+        self.relation = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=1, rel_pattern=[(3,2),(5,1),(5,3),(5,5)]) #,(5,5)
         
         self.backbone = nn.ModuleList([self.stage4, self.stage5]) #self.stage1, self.stage2, self.stage3, 
         self.convs = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge4, self.kq])
@@ -78,12 +78,13 @@ class Net(nn.Module):
 
         K, Q = self.kq(feats_rel)
         pred0, cam0 = self.gap(feats_loc)
-        cam0 = self.upscale_cam(cam0)
+        cam0 = self.upscale_cam(cam0)[..., :edge2.size(2), :edge2.size(3)]
         pred1, cam1 = self.relation(cam0, K, Q)
+        pred2, cam2 = self.relation(cam1, K, Q)
 
-        hms = self.save_hm(cam0, cam1)
+        hms = self.save_hm(cam0, cam2)
         
-        return [pred1], pred0, hms
+        return [pred1, pred2], pred0, hms
 
     def getHeatmaps(self, hms, classid):
         hm = []
@@ -119,14 +120,20 @@ class CAM(Net):
         x3 = self.stage3(x2).detach()
         x4 = self.stage4(x3)
         feats_loc = self.stage5(x4)  # N, 2048, KQ_FT_DIM, KQ_FT_DIM
-        feats_rel = self.branch_rel(x4)
 
+        edge1 = self.fc_edge1(x1)
+        edge2 = self.fc_edge2(x2)
+        edge3 = x3[..., :edge2.size(2), :edge2.size(3)]
+        edge4 = self.fc_edge4(x4)[..., :edge2.size(2), :edge2.size(3)]
+        feats_rel = torch.cat([edge1, edge2, edge3, edge4], dim=1)
+        # import pdb;pdb.set_trace()
         K, Q = self.kq(feats_rel)
         pred0, cam0 = self.gap(feats_loc)
+        cam0 = self.upscale_cam(cam0)[..., :edge2.size(2), :edge2.size(3)]
         pred1, cam1 = self.relation(cam0, K, Q)
-
+        pred2, cam2 = self.relation(cam1, K, Q)
         # x = F.conv2d(x, self.classifier.weight)
-        x = F.relu(cam1)
+        x = F.relu(cam2)
         
         x = x[0] + x[1].flip(-1)
 
