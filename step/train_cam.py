@@ -87,7 +87,7 @@ def run(args):
 	param_groups = model.trainable_parameters()
 	optimizer = torchutils.PolyOptimizer([
 		{'params': param_groups[0], 'lr': args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
-		{'params': param_groups[1], 'lr': 10*args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
+		{'params': param_groups[1], 'lr': 1*args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
 		{'params': param_groups[2], 'lr': 10*args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
 	], lr=args.cam_learning_rate, weight_decay=args.cam_weight_decay, max_step=max_step)
 
@@ -98,8 +98,8 @@ def run(args):
 
 	timer = pyutils.Timer()
 
-	fig, ax = plt.subplots(nrows=1, ncols=3)
-	cb = [None, None, None]
+	fig, ax = plt.subplots(nrows=1, ncols=4)
+	cb = [None, None, None, None]
 	img_denorm = torchutils.ImageDenorm()
 
 	for ep in range(args.cam_num_epoches):
