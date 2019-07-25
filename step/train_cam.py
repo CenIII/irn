@@ -52,6 +52,7 @@ def visualize(x, net, hms, label, fig, ax, cb, iterno, img_denorm, savepath):
 	# plot here
 	img = ax[0].imshow(x)
 	for i in range(len(ax)-1):
+		# import pdb;pdb.set_trace()
 		img = ax[i+1].imshow(hm[i][0].data.cpu().numpy())
 		if cb[i+1] is not None:
 			cb[i+1].remove()
@@ -87,7 +88,7 @@ def run(args):
 	param_groups = model.trainable_parameters()
 	optimizer = torchutils.PolyOptimizer([
 		{'params': param_groups[0], 'lr': args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
-		{'params': param_groups[1], 'lr': 1*args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
+		{'params': param_groups[1], 'lr': 10*args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
 		{'params': param_groups[2], 'lr': 10*args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
 	], lr=args.cam_learning_rate, weight_decay=args.cam_weight_decay, max_step=max_step)
 

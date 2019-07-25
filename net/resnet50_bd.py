@@ -49,10 +49,10 @@ class Net(nn.Module):
         )
         self.fc_edge6 = nn.Conv2d(160, 1, 1, bias=True)
         
-        self.gap0 = Gap(64, nclass)
+        self.gap0 = Gap(2048, 20)
         self.upscale_cam = nn.Upsample(scale_factor=4, mode='bilinear', align_corners=False)
-        self.infuse = BDInfusion(2, kq_dim, 2, n_heads=1, rel_pattern=[(3,3),(3,1),(3,5),(5,1)])
-        self.nclass = nclass
+        self.infuse = BDInfusion(20, 20, rel_pattern=[(3,3),(3,1),(3,5),(5,1)])
+        self.nclass = 20
 
         self.backbone = nn.ModuleList([self.stage4, self.stage5])
         self.boundary_branch = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge3, self.fc_edge4, self.fc_edge5, self.fc_edge6, self.infuse])
@@ -71,12 +71,12 @@ class Net(nn.Module):
         edge3 = self.fc_edge3(x3)[..., :edge2.size(2), :edge2.size(3)]
         edge4 = self.fc_edge4(x4)[..., :edge2.size(2), :edge2.size(3)]
         edge5 = self.fc_edge5(x5)[..., :edge2.size(2), :edge2.size(3)]
-        boundary = self.fc_edge6(torch.cat([edge1, edge2, edge3, edge4, edge5], dim=1))
+        boundary = torch.sigmoid(self.fc_edge6(torch.cat([edge1, edge2, edge3, edge4, edge5], dim=1)))
         
         pred0, cam0 = self.gap0(x5)
         cam0 = self.upscale_cam(cam0)[..., :edge2.size(2), :edge2.size(3)]
-        pred1, cam1 = self.relation(cam0, boundary)
-        pred2, cam2 = self.relation(cam1, boundary)
+        pred1, cam1 = self.infuse(cam0, boundary)
+        pred2, cam2 = self.infuse(cam1, boundary)
 
         hms = self.save_hm(cam0, boundary, cam2)
         
@@ -85,8 +85,8 @@ class Net(nn.Module):
     def getHeatmaps(self, hms, classid):
         hm = []
         for heatmap in hms:
-            if len(heatmap.squeeze().shape) == 2:
-                hm.append(heatmap)
+            if len(heatmap.squeeze().shape) == 3:
+                hm.append(heatmap.squeeze())
                 continue
             zzz = classid[:, None, None, None].repeat(1, heatmap.shape[1], heatmap.shape[2], 1)
             hm.append(torch.gather(heatmap, 3, zzz).squeeze())
@@ -95,6 +95,9 @@ class Net(nn.Module):
     def save_hm(self, *cams):
         hm = []
         for cam in cams:
+            if len(cam.squeeze().shape) == 3:
+                hm.append(cam)
+                continue
             hm.append(cam.permute(0,2,3,1))
         return hm
 

@@ -151,6 +151,65 @@ def col2im_indices(cols, x_shape, field_height=3, field_width=3, padding=1,
         return x_padded
     return x_padded[:, :, padding:-padding, padding:-padding]
 
+def im2col_boundary(x, field_height, field_width, padding=1, stride=1, dilate=1,dist_to_center=None):
+    # TODO: 1. check dist_to_center.
+    # 2. Modify the cols_list generation
+    # 3. Modify search range
+
+    # For boundary map, D=1.
+    # dist_to_center [ksize,ksize]
+    cols_list = [] 
+    cols_max_list = []
+    
+    # ============= collect the path from center to dilate*int(ksize/2)
+    # (e.g: ksize=5,dilate=2. Then collect point with distance [0,4])
+
+    # import pdb;pdb.set_trace()
+    # deal with center, reuse code for dilate=1
+    padding = int(field_height/2)*1
+    p = padding
+    x_padded = F.pad(x, (p, p, p, p), mode='constant',value=0)
+    k, i, j = get_im2col_indices(x.shape, field_height, field_width, padding,
+                                stride, 1)
+    cols_i = x_padded[:, k, i, j] #torch.Size([B, fW*fH*D, W*H])
+    # cols_i = cols_i[:,int(field_height*field_width/2),:].unsqueeze(1) # copy the value of center point
+    cols_i = cols_i.expand(-1,field_height*field_width,-1)
+    cols_list.append(cols_i)
+
+    for dilate_i in range(1,int(field_height/2)*dilate+1): # 1~int(field_height/2)*dilate
+        padding = int(field_height/2)*dilate_i # assume the height& width is always the same
+        p = padding
+        x_padded = F.pad(x, (p, p, p, p), mode='constant',value=0)
+        # import pdb;pdb.set_trace()
+        k, i, j = get_im2col_indices(x.shape, field_height, field_width, padding,
+                                    stride, dilate_i)
+        cols_i = x_padded[:, k, i, j] #torch.Size([B, fW*fH*D, W*H])
+        cols_list.append(cols_i)
+    cols_all = torch.stack(cols_list) # torch.Size([Dilate, B, fW*fH*D, W*H])
+
+    # For each distance, find the max value on path with dilationd distance [0,dist_i*dilate]
+    for dist_i in range(0,int(field_height/2)+1): # calculate max on path, dilate_i=k choose from k+1 values
+        cols,_ = torch.max(cols_all[:dist_i*dilate+1,:,:,:],dim=0) # torch.Size([B, fW*fH*D, W*H])
+        cols_max_list.append(cols)
+    cols_max_all = torch.stack(cols_max_list) # torch.Size([Dilate, B, fW*fH*D, W*H])
+
+    # todo: 
+    ksize = field_height
+    dist_to_center = torch.zeros([ksize,ksize])
+    mid = int(ksize/2)
+    for i in range(ksize):
+        for j in range(ksize):
+            dist_to_center[i][j]= max(abs(i-mid),abs(j-mid))
+    dist_to_center = dist_to_center.type(device.LongTensor)
+    
+    dist_to_center = dist_to_center.reshape(1,1,-1,1).expand(1,cols_max_all.shape[1],-1,cols_max_all.shape[3]).contiguous() # torch.Size([1, B, fW*fH*D, W*H])
+    cols = torch.gather(cols_max_all,dim=0,index=dist_to_center).squeeze(0) # !!the problem occurs here
+    C = x.shape[1] #D
+    # [5,mid] is the original pixel for (2,2)
+    
+    cols = cols.permute(1, 2, 0).contiguous().view(field_height * field_width * C, -1) # [fW*fH*D,W*H*B] (feature for each pixel ,num of pixels)
+    return cols
+
 class ImageDenorm():
     def __init__(self, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
         self.mean = mean
