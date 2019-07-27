@@ -51,10 +51,11 @@ class Net(nn.Module):
         )
         self.fc_edge6 = nn.Conv2d(160, 1, 1, bias=True)
         
-        self.gap0 = Gap(2048, 20)
+        self.nclass = 21
+        self.gap0 = Gap(2048, self.nclass)
         self.upscale_cam = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
-        self.infuse = BDInfusion(20, 20, rel_pattern=[(3,3),(3,6),(5,1),(5,5)])
-        self.nclass = 20
+        self.infuse = BDInfusion(self.nclass, self.nclass, rel_pattern=[(3,3),(3,6),(5,1),(5,5)])
+        
 
         self.backbone = nn.ModuleList([self.stage4, self.stage5])
         self.boundary_branch = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge3, self.fc_edge4, self.fc_edge5, self.fc_edge6, self.infuse])

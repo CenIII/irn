@@ -102,7 +102,7 @@ def run(args):
 	fig, ax = plt.subplots(nrows=1, ncols=4)
 	cb = [None, None, None, None]
 	img_denorm = torchutils.ImageDenorm()
-
+	bg_label = torch.ones([args.cam_batch_size,1]).cuda()
 	for ep in range(args.cam_num_epoches):
 
 		print('Epoch %d/%d' % (ep+1, args.cam_num_epoches))
@@ -115,16 +115,14 @@ def run(args):
 			preds, pred0, hms = model(img)
 			if (optimizer.global_step-1)%10 == 0 and args.cam_visualize_train:
 				visualize(img, model.module, hms, label, fig, ax, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir)
-			loss = torchutils.batch_multilabel_loss(preds, label, mean=True)
+			loss = torchutils.batch_multilabel_loss(preds, torch.cat((label,bg_label[:len(label)]),dim=1), mean=True)
 			loss += F.multilabel_soft_margin_loss(pred0, label)
 			avg_meter.add({'loss1': loss.item()})
-			with autograd.detect_anomaly():
-				optimizer.zero_grad()
-				loss.backward()
-				# import pdb;pdb.set_trace()
-				# print(torch.max(model.module.gap.lin.weight.grad))
-				clip_grad_norm_(model.parameters(), 1.)
-				optimizer.step()
+			
+			optimizer.zero_grad()
+			loss.backward()
+			clip_grad_norm_(model.parameters(), 1.)
+			optimizer.step()
 
 			if (optimizer.global_step-1)%100 == 0:
 				timer.update_progress(optimizer.global_step / max_step)

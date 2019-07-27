@@ -9,17 +9,32 @@ else:
 	import torch as device
 import torch.nn.functional as F
 
+BG_THRES = 0.1
+
 class Gap(nn.Module):
     def __init__(self, in_channels, n_class):
         super(Gap, self).__init__()
-        self.lin = nn.Conv2d(in_channels,n_class,1,bias=False) #nn.Linear(in_channels, n_class, bias=False)
+        self.lin = nn.Conv2d(in_channels,n_class-1,1,bias=False) #nn.Linear(in_channels, n_class, bias=False)
         self.n_class = n_class
+
+    # def forward(self, x):
+    #     N = x.shape[0]
+    #     cam = self.lin(x) #.permute(0, 2, 3, 1)
+    #     pred = torch.mean(cam.view(N, self.n_class, -1), dim=2)
+    #     return pred, cam
 
     def forward(self, x):
         N = x.shape[0]
-        cam = self.lin(x) #.permute(0, 2, 3, 1)
-        pred = torch.mean(cam.view(N, self.n_class, -1), dim=2)
-        return pred, cam
+        cam = self.lin(x) 
+        pred = torch.mean(cam.view(N, self.n_class-1, -1), dim=2)
+        cam_2 = torch.sum(F.relu(cam),dim=1,keepdim=True)/2
+        thres = BG_THRES*torch.max(cam_2.view(N,-1),dim=1)[0]
+        cam_2 = thres[:,None,None,None]-cam_2
+        
+        cam_cat = torch.cat((cam,cam_2),dim=1)
+
+        
+        return pred, cam_cat
 
     def infer_class_maps(self, x):
         x = self.lin(x.permute(0, 2, 3, 1))

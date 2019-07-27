@@ -9,6 +9,8 @@ else:
 	import torch as device
 import torch.nn.functional as F
 
+BG_FG_RATIO = 8
+
 class Infuse(nn.Module):
     def __init__(self, v_dim, kernel_size=5, dilation=3):
         super(Infuse, self).__init__()  
@@ -66,4 +68,7 @@ class BDInfusion(nn.Module):
             
         feats_r = torch.stack(feats_r, dim=0).sum(0)
         pred_r = torch.mean(feats_r.view(N, self.n_class, -1), dim=2)
+        factor = torch.ones(21).type(device.FloatTensor)[None,:]
+        factor[0,20] = BG_FG_RATIO
+        pred_r = pred_r/factor
         return pred_r, feats_r

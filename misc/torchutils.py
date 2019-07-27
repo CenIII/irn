@@ -176,6 +176,9 @@ def im2col_boundary(x, field_height, field_width, padding=1, stride=1, dilate=1,
     cols_i = cols_i.expand(-1,field_height*field_width,-1)
     cols_list.append(cols_i)
 
+    cols_i = cols_i.expand(-1,field_height*field_width,-1)
+    cols_list.append(cols_i)
+
     for dilate_i in range(1,int(field_height/2)*dilate+1): # 1~int(field_height/2)*dilate
         padding = int(field_height/2)*dilate_i # assume the height& width is always the same
         p = padding
