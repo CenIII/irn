@@ -38,34 +38,34 @@ class Net(nn.Module):
             nn.MaxPool2d(2)
             # nn.ReLU(inplace=True),
         )
-        self.fc_edge3 = nn.Sequential(
-            # nn.Conv2d(512, 256, 1, bias=False),
-            # nn.GroupNorm(4, 32),
-            nn.MaxPool2d(2)
-            # nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
-            # nn.ReLU(inplace=True),
-        )
-        # self.fc_edge4 = nn.Sequential(
-        #     # nn.Conv2d(1024, 512, 1, bias=False),
+        # self.fc_edge3 = nn.Sequential(
+        #     # nn.Conv2d(512, 256, 1, bias=False),
         #     # nn.GroupNorm(4, 32),
-        #     nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+        #     nn.MaxPool2d(2)
+        #     # nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
         #     # nn.ReLU(inplace=True),
         # )
+        self.fc_edge4 = nn.Sequential(
+            # nn.Conv2d(1024, 512, 1, bias=False),
+            # nn.GroupNorm(4, 32),
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+            # nn.ReLU(inplace=True),
+        )
 
         self.n_class = 20
         self.gap = Gap(2048, self.n_class)
 
-        self.high_kq = KQ(512+1024, KQ_DIM) # 32
-        self.high_rel = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=1, rel_pattern=[(3,2),(3,5),(5,3)])  # 2,0,0,1,0,1,1,0,0,0,1
+        # self.high_kq = KQ(512+1024, KQ_DIM) # 32
+        # self.high_rel = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=1, rel_pattern=[(5,6),(5,4)])  # 2,0,0,1,0,1,1,0,0,0,1
 
-        self.low_kq = KQ(64+256, KQ_DIM) # 64
+        self.low_kq = KQ(64+256+512+1024, KQ_DIM) # 64
         self.low_rel = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=1, rel_pattern=[(3,2),(5,1),(5,3),(5,5)]) #,(5,5)
 
         self.upscale_cam = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
         
 
         self.backbone = nn.ModuleList([self.stage4, self.stage5]) #self.stage1, self.stage2, self.stage3, 
-        self.convs = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge3, self.high_kq, self.low_kq])
+        self.convs = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge4, self.low_kq])
         self.leaf_gaps = nn.ModuleList([self.gap])
 
     def forward(self, x):
@@ -78,22 +78,20 @@ class Net(nn.Module):
 
         edge1 = self.fc_edge1(x1) # 64
         edge2 = self.fc_edge2(x2) # 64
-        edge3 = self.fc_edge3(x3) # 32
-        edge4 = x4 # 32
-        feats_low_rel = torch.cat([edge1, edge2], dim=1)
-        feats_high_rel = torch.cat([edge3, edge4], dim=1)
+        edge3 = x3 # 32
+        edge4 = self.fc_edge4(x4) # 32
+        feats_low_rel = torch.cat([edge1, edge2, edge3, edge4], dim=1)
 
         pred0, cam0 = self.gap(feats_loc)
-        # Kh, Qh = self.high_kq(feats_high_rel)
-        # pred1, cam1 = self.high_rel(cam0, Kh, Qh)
 
-        cam1 = self.upscale_cam(cam0)[..., :edge2.size(2), :edge2.size(3)]
+        cam0 = self.upscale_cam(cam0)[..., :edge2.size(2), :edge2.size(3)]
 
         Kl, Ql = self.low_kq(feats_low_rel)
-        pred2, cam2 = self.low_rel(cam1, Kl, Ql)
+        # pred1, cam1 = self.high_rel(cam0, Kl, Ql)
+        pred2, cam2 = self.low_rel(cam0, Kl, Ql)
         pred3, cam3 = self.low_rel(cam2, Kl, Ql)
 
-        hms = self.save_hm(cam0, cam1, cam3)
+        hms = self.save_hm(cam0, cam2, cam3)
         
         return [pred2, pred3], pred0, hms  #pred1, 
 
