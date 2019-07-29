@@ -55,10 +55,10 @@ class Net(nn.Module):
         self.n_class = 20
         self.gap = Gap(2048, self.n_class)
 
-        self.high_kq = KQ(64+256, KQ_DIM) # 32
+        self.high_kq = KQ(512+1024, KQ_DIM) # 32
         self.high_rel = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=1, rel_pattern=[(5,5),(5,3)])  # 2,0,0,1,0,1,1,0,0,0,1
 
-        self.low_kq = KQ(512+1024, KQ_DIM) # 64
+        self.low_kq = KQ(64+256, KQ_DIM) # 64
         self.low_rel = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=1, rel_pattern=[(3,2),(5,1),(5,3),(5,5)]) #,(5,5)
 
         self.upscale_cam = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
@@ -78,7 +78,7 @@ class Net(nn.Module):
 
         edge1 = self.fc_edge1(x1) # 64
         edge2 = self.fc_edge2(x2) # 64
-        edge3 = self.fc_edge4(x3) # 32
+        edge3 = self.fc_edge3(x3) # 32
         edge4 = x4 # 32
         feats_low_rel = torch.cat([edge1, edge2], dim=1)
         feats_high_rel = torch.cat([edge3, edge4], dim=1)
@@ -134,7 +134,7 @@ class CAM(Net):
 
         edge1 = self.fc_edge1(x1) # 64
         edge2 = self.fc_edge2(x2) # 64
-        edge3 = self.fc_edge4(x3) # 32
+        edge3 = self.fc_edge3(x3) # 32
         edge4 = x4 # 32
         feats_low_rel = torch.cat([edge1, edge2], dim=1)
         feats_high_rel = torch.cat([edge3, edge4], dim=1)

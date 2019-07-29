@@ -52,11 +52,11 @@ def visualize(x, net, hms, label, fig, ax, cb, iterno, img_denorm, savepath):
 	img = ax[0][0].imshow(x)
 	for i in range(1, len(hms)+1):
 
-		img = ax[i/2][i%2].imshow(hm[i-1][0].data.cpu().numpy())
+		img = ax[int(i/2)][int(i%2)].imshow(hm[i-1][0].data.cpu().numpy())
 		if cb[i] is not None:
 			cb[i].remove()
 		
-		divider = make_axes_locatable(ax[i/2][i%2])
+		divider = make_axes_locatable(ax[int(i/2)][int(i%2)])
 		cax = divider.append_axes("right", size="5%", pad=0.05)
 		cb[i] = plt.colorbar(img, cax=cax)
 	
