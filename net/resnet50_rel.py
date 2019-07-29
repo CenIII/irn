@@ -59,7 +59,7 @@ class Net(nn.Module):
         self.high_rel = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=1, rel_pattern=[(5,5),(5,3)])  # 2,0,0,1,0,1,1,0,0,0,1
 
         self.low_kq = KQ(512+1024, KQ_DIM) # 64
-        self.high_rel = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=1, rel_pattern=[(3,2),(5,1),(5,3),(5,5)]) #,(5,5)
+        self.low_rel = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=1, rel_pattern=[(3,2),(5,1),(5,3),(5,5)]) #,(5,5)
 
         self.upscale_cam = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
         
@@ -85,16 +85,17 @@ class Net(nn.Module):
 
         pred0, cam0 = self.gap(feats_loc)
         Kh, Qh = self.high_kq(feats_high_rel)
-        pred1, cam1 = self.relation(cam0, Kh, Qh)
+        pred1, cam1 = self.high_rel(cam0, Kh, Qh)
 
         cam1 = self.upscale_cam(cam1)[..., :edge2.size(2), :edge2.size(3)]
 
         Kl, Ql = self.low_kq(feats_low_rel)
-        pred2, cam2 = self.relation(cam1, Kl, Ql)
+        pred2, cam2 = self.low_rel(cam1, Kl, Ql)
+        pred3, cam3 = self.low_rel(cam2, Kl, Ql)
 
-        hms = self.save_hm(cam0, cam1, cam2)
+        hms = self.save_hm(cam0, cam1, cam3)
         
-        return [pred1, pred2], pred0, hms
+        return [pred1, pred2, pred3], pred0, hms
 
     def getHeatmaps(self, hms, classid):
         hm = []
@@ -131,19 +132,24 @@ class CAM(Net):
         x4 = self.stage4(x3)
         feats_loc = self.stage5(x4)  # N, 2048, KQ_FT_DIM, KQ_FT_DIM
 
-        edge1 = self.fc_edge1(x1)
-        edge2 = self.fc_edge2(x2)
-        edge3 = x3[..., :edge2.size(2), :edge2.size(3)]
-        edge4 = self.fc_edge4(x4)[..., :edge2.size(2), :edge2.size(3)]
-        feats_rel = torch.cat([edge1, edge2, edge3, edge4], dim=1)
-        # import pdb;pdb.set_trace()
-        K, Q = self.kq(feats_rel)
+        edge1 = self.fc_edge1(x1) # 64
+        edge2 = self.fc_edge2(x2) # 64
+        edge3 = self.fc_edge4(x3) # 32
+        edge4 = x4 # 32
+        feats_low_rel = torch.cat([edge1, edge2], dim=1)
+        feats_high_rel = torch.cat([edge3, edge4], dim=1)
+
         pred0, cam0 = self.gap(feats_loc)
-        cam0 = self.upscale_cam(cam0)[..., :edge2.size(2), :edge2.size(3)]
-        pred1, cam1 = self.relation(cam0, K, Q)
-        pred2, cam2 = self.relation(cam1, K, Q)
+        Kh, Qh = self.high_kq(feats_high_rel)
+        pred1, cam1 = self.high_rel(cam0, Kh, Qh)
+
+        cam1 = self.upscale_cam(cam1)[..., :edge2.size(2), :edge2.size(3)]
+
+        Kl, Ql = self.low_kq(feats_low_rel)
+        pred2, cam2 = self.low_rel(cam1, Kl, Ql)
+        pred3, cam3 = self.low_rel(cam2, Kl, Ql)
         # x = F.conv2d(x, self.classifier.weight)
-        x = F.relu(cam2)
+        x = F.relu(cam3)
         
         x = x[0] + x[1].flip(-1)
 
