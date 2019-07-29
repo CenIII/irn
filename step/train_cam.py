@@ -46,20 +46,19 @@ def validate(model, data_loader):
 	return
 
 def visualize(x, net, hms, label, fig, ax, cb, iterno, img_denorm, savepath):
-	# import pdb;pdb.set_trace()
 	x = img_denorm(x[0].permute(1,2,0).data.cpu().numpy()).astype(np.int32)
 	hm = net.getHeatmaps(hms, label.max(dim=1)[1])
 	# plot here
-	img = ax[0].imshow(x)
-	for i in range(len(ax)-1):
-		img = ax[i+1].imshow(hm[i][0].data.cpu().numpy())
-		if cb[i+1] is not None:
-			cb[i+1].remove()
+	img = ax[0][0].imshow(x)
+	for i in range(1, len(hms)+1):
+
+		img = ax[i/2][i%2].imshow(hm[i-1][0].data.cpu().numpy())
+		if cb[i] is not None:
+			cb[i].remove()
 		
-		divider = make_axes_locatable(ax[i+1])
+		divider = make_axes_locatable(ax[i/2][i%2])
 		cax = divider.append_axes("right", size="5%", pad=0.05)
-		cb[i+1] = plt.colorbar(img, cax=cax)
-		# cb[i+1] = plt.colorbar(img, ax=ax[i+1])
+		cb[i] = plt.colorbar(img, cax=cax)
 	
 	fig.suptitle('iteration '+str(iterno))
 	
@@ -98,8 +97,8 @@ def run(args):
 
 	timer = pyutils.Timer()
 
-	fig, ax = plt.subplots(nrows=1, ncols=3)
-	cb = [None, None, None]
+	fig, ax = plt.subplots(nrows=2, ncols=2)
+	cb = [None, None, None, None]
 	img_denorm = torchutils.ImageDenorm()
 
 	for ep in range(args.cam_num_epoches):
