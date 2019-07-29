@@ -56,7 +56,7 @@ class Net(nn.Module):
         self.gap = Gap(2048, self.n_class)
 
         self.high_kq = KQ(512+1024, KQ_DIM) # 32
-        self.high_rel = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=1, rel_pattern=[(5,5),(5,3)])  # 2,0,0,1,0,1,1,0,0,0,1
+        self.high_rel = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=1, rel_pattern=[(3,2),(3,5),(5,3)])  # 2,0,0,1,0,1,1,0,0,0,1
 
         self.low_kq = KQ(64+256, KQ_DIM) # 64
         self.low_rel = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=1, rel_pattern=[(3,2),(5,1),(5,3),(5,5)]) #,(5,5)
@@ -84,10 +84,10 @@ class Net(nn.Module):
         feats_high_rel = torch.cat([edge3, edge4], dim=1)
 
         pred0, cam0 = self.gap(feats_loc)
-        Kh, Qh = self.high_kq(feats_high_rel)
-        pred1, cam1 = self.high_rel(cam0, Kh, Qh)
+        # Kh, Qh = self.high_kq(feats_high_rel)
+        # pred1, cam1 = self.high_rel(cam0, Kh, Qh)
 
-        cam1 = self.upscale_cam(cam1)[..., :edge2.size(2), :edge2.size(3)]
+        cam1 = self.upscale_cam(cam0)[..., :edge2.size(2), :edge2.size(3)]
 
         Kl, Ql = self.low_kq(feats_low_rel)
         pred2, cam2 = self.low_rel(cam1, Kl, Ql)
@@ -95,7 +95,7 @@ class Net(nn.Module):
 
         hms = self.save_hm(cam0, cam1, cam3)
         
-        return [pred1, pred2, pred3], pred0, hms
+        return [pred2, pred3], pred0, hms  #pred1, 
 
     def getHeatmaps(self, hms, classid):
         hm = []
@@ -117,7 +117,7 @@ class Net(nn.Module):
             p.requires_grad = False
 
     def trainable_parameters(self):
-        return (list(self.backbone.parameters()), list(self.convs.parameters()), list(self.leaf_gaps.parameters()))
+        return (list(self.backbone.parameters()), list(self.convs.parameters()), list(self.leaf_gaps.parameters())) #(list(self.backbone.parameters()), 
 
 
 class CAM(Net):
