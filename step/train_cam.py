@@ -134,7 +134,8 @@ def run(args):
 					  'etc:%s' % (timer.str_estimated_complete()), flush=True)
 
 		else:
-			torch.save(model.module.state_dict(), args.cam_weights_name + '.pth')
+			postfix = '_'+str(ep+1) if (ep+1)%5==0 else ''
+			torch.save(model.module.state_dict(), args.cam_weights_name + postfix + '.pth')
 			validate(model, val_data_loader)
 			timer.reset_stage()
 
