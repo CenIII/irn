@@ -81,7 +81,13 @@ class Infusion(nn.Module):
         self.n_heads = n_heads
         self.h_dim = int(kq_dim / n_heads)
 
-    def forward(self, V, K, Q, ksize, dilation): # NxDxHxW
+    def center_att_suppress(self,att,ksize,factor):
+        tmp = torch.ones_like(att).type(device.FloatTensor)
+        tmp[:,:,int(ksize**2/2)] = factor
+        att = att * tmp
+        return att
+        
+    def forward(self, V, K, Q, ksize, dilation, c_factor=1.): # NxDxHxW
         N, D, H, W = V.shape # 8, 32, 124, 124
         padding = int(ksize/2)*dilation
         Hf = ksize
@@ -91,6 +97,8 @@ class Infusion(nn.Module):
         tmp = (K_trans.view(self.n_heads, self.h_dim, -1, K_trans.shape[-1]) * Q_trans.unsqueeze(2)).view(self.n_heads, self.h_dim, Hf*Wf, -1)
         tmp = tmp.sum(1, True)/np.sqrt(self.h_dim) # (4, 1, 5*5, 38440) 
         att = torch.softmax(tmp, 2) # (4, 1, 25, 38440)
+        # XXX: should the center attention be suppressed after softmax or before it?
+        att = self.center_att_suppress(att,ksize,c_factor)
         V_trans = im2col_indices(V, Hf, Wf, padding, 1, dilation).view(1, self.v_dim, Hf*Wf, -1)
         out = (V_trans * att).sum(2).sum(0).view(D, H, W, N).permute(3, 0, 1, 2)/(self.n_heads+1e-5)
         return out
@@ -140,8 +148,9 @@ class Relation(nn.Module):
     def forward(self, feats, K, Q):
         N = feats.shape[0]
         feats_r = []
+        c_factor = float(1/len(self.rel_pattern))
         for ksize, dilation in self.rel_pattern:
-            feats_r.append(self.infuse(feats, K, Q, ksize, dilation))
+            feats_r.append(self.infuse(feats, K, Q, ksize, dilation, c_factor=c_factor))
         feats_r = torch.stack(feats_r, dim=0).sum(0)
         pred_r = torch.mean(feats_r.view(N, self.n_class, -1), dim=2)
         return pred_r, feats_r
