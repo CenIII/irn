@@ -59,10 +59,10 @@ class Net(nn.Module):
         # self.high_rel = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=1, rel_pattern=[(5,6),(5,4)])  # 2,0,0,1,0,1,1,0,0,0,1
 
         self.low_kq = KQ(64+256+512+1024, KQ_DIM) # 64
-        self.low_rel = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=1, rel_pattern=[(3,2),(5,1),(5,3),(5,5)]) #,(5,5)
+        self.low_rel = Relation(self.n_class, KQ_DIM, self.n_class, 
+                                n_heads=1, rel_pattern=[(3,2),(5,1),(5,3),(5,5)]) #,(5,5)
 
         self.upscale_cam = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
-        
 
         self.backbone = nn.ModuleList([self.stage4, self.stage5]) #self.stage1, self.stage2, self.stage3, 
         self.convs = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge4, self.low_kq])
