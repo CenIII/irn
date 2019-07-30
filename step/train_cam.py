@@ -17,6 +17,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np 
 from torch.nn.utils import clip_grad_norm_
 import os
+import random
 	
 def validate(model, data_loader):
 	print('validating ... ', flush=True, end='')
@@ -68,7 +69,17 @@ def visualize(x, net, hms, label, fig, ax, cb, iterno, img_denorm, savepath):
 	return cb
 
 def run(args):
-
+	seed = 42
+	torch.manual_seed(seed)
+	torch.cuda.manual_seed(seed)
+	torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU.
+	np.random.seed(seed)  # Numpy module.
+	random.seed(seed)  # Python random module.
+	torch.manual_seed(seed)
+	torch.backends.cudnn.benchmark = False
+	torch.backends.cudnn.deterministic = True
+	def _init_fn(worker_id):
+		np.random.seed(int(seed))
 	model = getattr(importlib.import_module(args.cam_network), 'Net')()
 
 
@@ -76,7 +87,7 @@ def run(args):
 																resize_long=(320, 640), hor_flip=True,
 																crop_size=512, crop_method="random")
 	train_data_loader = DataLoader(train_dataset, batch_size=args.cam_batch_size,
-								   shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=True)
+								   shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=True, worker_init_fn=_init_fn)
 	max_step = (len(train_dataset) // args.cam_batch_size) * args.cam_num_epoches
 
 	val_dataset = voc12.dataloader.VOC12ClassificationDataset(args.val_list, voc12_root=args.voc12_root,
