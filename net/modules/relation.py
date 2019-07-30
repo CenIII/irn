@@ -80,7 +80,7 @@ class Infusion(nn.Module):
         self.kq_dim = kq_dim
         self.n_heads = n_heads
         self.h_dim = int(kq_dim / n_heads)
-
+        
     def forward(self, V, K, Q, ksize, dilation): # NxDxHxW
         N, D, H, W = V.shape # 8, 32, 124, 124
         padding = int(ksize/2)*dilation
