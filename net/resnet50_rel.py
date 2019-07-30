@@ -52,9 +52,9 @@ class Net(nn.Module):
         )
 
         self.n_class = 20
-        self.kq = KQ(1856, KQ_DIM)
+        self.kq = KQ(1024+512, KQ_DIM)
         
-        self.gap = Gap(512+1024, self.n_class)
+        self.gap = Gap(2048, self.n_class)
         self.upscale_cam = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
         self.relation = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=1, 
                                 rel_pattern=[(3,2),(5,1),(5,3),(5,5)]) #,(5,5)
