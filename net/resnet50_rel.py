@@ -52,7 +52,7 @@ class Net(nn.Module):
         )
 
         self.n_class = 20
-        self.kq = KQ(64+256, KQ_DIM) #512+1024
+        self.kq = KQ(64+256+512+1024, KQ_DIM) #512+1024
         
         self.gap = Gap(2048, self.n_class)
         self.upscale_cam = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
