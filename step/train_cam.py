@@ -69,6 +69,8 @@ def visualize(x, net, hms, label, fig, ax, cb, iterno, img_denorm, savepath):
 	return cb
 
 def run(args):
+	model = getattr(importlib.import_module(args.cam_network), 'Net')()
+
 	seed = 42
 	torch.manual_seed(seed)
 	torch.cuda.manual_seed(seed)
@@ -80,9 +82,7 @@ def run(args):
 	torch.backends.cudnn.deterministic = True
 	def _init_fn(worker_id):
 		np.random.seed(int(seed))
-	model = getattr(importlib.import_module(args.cam_network), 'Net')()
-
-
+		
 	train_dataset = voc12.dataloader.VOC12ClassificationDataset(args.train_list, voc12_root=args.voc12_root,
 																resize_long=(320, 640), hor_flip=True,
 																crop_size=512, crop_method="random")

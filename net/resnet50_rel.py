@@ -52,7 +52,7 @@ class Net(nn.Module):
         )
 
         self.n_class = 20
-        self.kq = KQ(1024+512, KQ_DIM)
+        self.kq = KQ(64+256+512+1024, KQ_DIM)
         
         self.gap = Gap(2048, self.n_class)
         self.upscale_cam = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
@@ -75,7 +75,7 @@ class Net(nn.Module):
         edge2 = self.fc_edge2(x2)
         edge3 = x3[..., :edge2.size(2), :edge2.size(3)]
         edge4 = self.fc_edge4(x4)[..., :edge2.size(2), :edge2.size(3)]
-        feats_rel = torch.cat([edge3, edge4], dim=1) #edge1, edge2, 
+        feats_rel = torch.cat([edge1, edge2, edge3, edge4], dim=1) #edge1, edge2, 
 
         K, Q = self.kq(feats_rel)
         pred0, cam0 = self.gap(feats_loc)
