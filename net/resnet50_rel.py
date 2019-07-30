@@ -80,7 +80,7 @@ class Net(nn.Module):
         edge2 = self.fc_edge2(x2) # 64
         edge3 = x3 # 32
         edge4 = self.fc_edge4(x4) # 32
-        feats_low_rel = torch.cat([edge1, edge1], dim=1)
+        feats_low_rel = torch.cat([edge1, edge2], dim=1)
 
         pred0, cam0 = self.gap(feats_loc)
 
