@@ -116,7 +116,7 @@ def im2col_indices(x, field_height, field_width, padding=1, stride=1, dilate=1):
     """ An implementation of im2col based on some fancy indexing """
     # Zero-pad the input
     p = padding
-    x_padded = F.pad(x, (p, p, p, p), mode='reflect')
+    x_padded = F.pad(x, (p, p, p, p), mode='constant', value=0)
 
     k, i, j = get_im2col_indices(x.shape, field_height, field_width, padding,
                                  stride, dilate)
