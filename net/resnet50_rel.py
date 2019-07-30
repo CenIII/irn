@@ -81,7 +81,7 @@ class Net(nn.Module):
         pred0, cam0 = self.gap(feats_loc)
         K_d, Q_d = F.max_pool2d(K,2), F.max_pool2d(Q,2)
         pred1, cam1 = self.relation(cam0, K_d, Q_d)
-        cam0 = self.upscale_cam(cam0)[..., :edge2.size(2), :edge2.size(3)]
+        cam1 = self.upscale_cam(cam1)[..., :edge2.size(2), :edge2.size(3)]
         pred2, cam2 = self.relation(cam1, K, Q)
 
         hms = self.save_hm(cam0, cam1, cam2)
