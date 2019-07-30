@@ -47,7 +47,7 @@ def validate(model, data_loader):
 	return
 
 def visualize(x, net, hms, label, fig, ax, cb, iterno, img_denorm, savepath):
-    x = img_denorm(x[0].permute(1,2,0).data.cpu().numpy()).astype(np.int32)
+	x = img_denorm(x[0].permute(1,2,0).data.cpu().numpy()).astype(np.int32)
 	hm = net.getHeatmaps(hms, label.max(dim=1)[1])
 	# plot here
 	img = ax[0][0].imshow(x)
