@@ -58,7 +58,7 @@ class Net(nn.Module):
         # self.high_kq = KQ(512+1024, KQ_DIM) # 32
         # self.high_rel = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=1, rel_pattern=[(5,6),(5,4)])  # 2,0,0,1,0,1,1,0,0,0,1
 
-        self.low_kq = KQ(512+1024, KQ_DIM) # 64
+        self.low_kq = KQ(64+256, KQ_DIM) # 64
         self.low_rel = Relation(self.n_class, KQ_DIM, self.n_class, 
                                 n_heads=1, rel_pattern=[(3,2),(5,1),(5,3),(5,5)]) #,(5,5)
 
@@ -80,7 +80,7 @@ class Net(nn.Module):
         edge2 = self.fc_edge2(x2) # 64
         edge3 = x3 # 32
         edge4 = self.fc_edge4(x4) # 32
-        feats_low_rel = torch.cat([edge3, edge4], dim=1)
+        feats_low_rel = torch.cat([edge1, edge1], dim=1)
 
         pred0, cam0 = self.gap(feats_loc)
 
