@@ -52,7 +52,7 @@ class Net(nn.Module):
         )
 
         self.n_class = 20
-        self.kq = KQ(64+256+512+1024, KQ_DIM)
+        self.kq = KQ(64+256, KQ_DIM) #512+1024
         
         self.gap = Gap(2048, self.n_class)
         self.upscale_cam = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
@@ -79,11 +79,12 @@ class Net(nn.Module):
 
         K, Q = self.kq(feats_rel)
         pred0, cam0 = self.gap(feats_loc)
+        K_d, Q_d = F.max_pool2d(K,2), F.max_pool2d(Q,2)
+        pred1, cam1 = self.relation(cam0, K_d, Q_d)
         cam0 = self.upscale_cam(cam0)[..., :edge2.size(2), :edge2.size(3)]
-        pred1, cam1 = self.relation(cam0, K, Q)
         pred2, cam2 = self.relation(cam1, K, Q)
 
-        hms = self.save_hm(cam0, cam2)
+        hms = self.save_hm(cam0, cam1, cam2)
         
         return [pred1, pred2], pred0, hms
 
