@@ -81,12 +81,14 @@ class Net(nn.Module):
         pred0, cam0 = self.gap(feats_loc)
         K_d, Q_d = F.max_pool2d(K,2), F.max_pool2d(Q,2)
         pred1, cam1 = self.relation(cam0, K_d, Q_d)
-        cam1 = self.upscale_cam(cam1)[..., :edge2.size(2), :edge2.size(3)]
-        pred2, cam2 = self.relation(cam1, K, Q)
+        pred2, cam2 = self.relation(cam1, K_d, Q_d)
+        cam2 = self.upscale_cam(cam2)[..., :edge2.size(2), :edge2.size(3)]
+        pred3, cam3 = self.relation(cam2, K, Q)
+        pred4, cam4 = self.relation(cam3, K, Q)
 
-        hms = self.save_hm(cam0, cam1, cam2)
+        hms = self.save_hm(cam0, cam2, cam4)
         
-        return [pred1, pred2], pred0, hms
+        return [pred1, pred2, pred3, pred4], pred0, hms
 
     def getHeatmaps(self, hms, classid):
         hm = []
@@ -127,15 +129,18 @@ class CAM(Net):
         edge2 = self.fc_edge2(x2)
         edge3 = x3[..., :edge2.size(2), :edge2.size(3)]
         edge4 = self.fc_edge4(x4)[..., :edge2.size(2), :edge2.size(3)]
-        feats_rel = torch.cat([edge1, edge2, edge3, edge4], dim=1)
-        # import pdb;pdb.set_trace()
+        feats_rel = torch.cat([edge1, edge2, edge3, edge4], dim=1) #edge1, edge2, 
+
         K, Q = self.kq(feats_rel)
         pred0, cam0 = self.gap(feats_loc)
-        cam0 = self.upscale_cam(cam0)[..., :edge2.size(2), :edge2.size(3)]
-        pred1, cam1 = self.relation(cam0, K, Q)
-        pred2, cam2 = self.relation(cam1, K, Q)
+        K_d, Q_d = F.max_pool2d(K,2), F.max_pool2d(Q,2)
+        pred1, cam1 = self.relation(cam0, K_d, Q_d)
+        pred2, cam2 = self.relation(cam1, K_d, Q_d)
+        cam2 = self.upscale_cam(cam2)[..., :edge2.size(2), :edge2.size(3)]
+        pred3, cam3 = self.relation(cam2, K, Q)
+        pred4, cam4 = self.relation(cam3, K, Q)
         # x = F.conv2d(x, self.classifier.weight)
-        x = F.relu(cam2)
+        x = F.relu(cam4)
         
         x = x[0] + x[1].flip(-1)
 
