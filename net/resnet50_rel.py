@@ -63,8 +63,7 @@ class Net(nn.Module):
         self.convs = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge4, self.kq])
         self.leaf_gaps = nn.ModuleList([self.gap])
 
-    def forward(self, x):
-
+    def infer(self, x):
         x1 = self.stage1(x).detach()
         x2 = self.stage2(x1).detach()
         x3 = self.stage3(x2).detach()
@@ -79,16 +78,20 @@ class Net(nn.Module):
 
         K, Q = self.kq(feats_rel)
         pred0, cam0 = self.gap(feats_loc)
-        K_d, Q_d = F.max_pool2d(K,2), F.max_pool2d(Q,2)
-        pred1, cam1 = self.relation(cam0, K_d, Q_d)
-        pred2, cam2 = self.relation(cam1, K_d, Q_d)
-        cam2 = self.upscale_cam(cam2)[..., :edge2.size(2), :edge2.size(3)]
-        pred3, cam3 = self.relation(cam2, K, Q)
-        pred4, cam4 = self.relation(cam3, K, Q)
+        K_d, Q_d = F.max_pool2d(K,2,padding=1)[..., :cam0.size(2), :cam0.size(3)], F.max_pool2d(Q,2,padding=1)[..., :cam0.size(2), :cam0.size(3)]
+        pred1, cam1 = self.relation(cam0.detach(), K_d, Q_d)
+        cam1 = self.upscale_cam(cam1)[..., :edge2.size(2), :edge2.size(3)]
+        pred2, cam2 = self.relation(cam1, K, Q)
 
-        hms = self.save_hm(cam0, cam2, cam4)
+        return pred0, cam0, [pred1,pred2,pred3,pre4], [cam1,cam2,cam3,cam4]
+
+    def forward(self, x):
+
+        pred0, cam0, preds, cams = self.infer(x)
+
+        hms = self.save_hm(cam0, cams[2], cams[4])
         
-        return [pred1, pred2, pred3, pred4], pred0, hms
+        return preds, pred0, hms
 
     def getHeatmaps(self, hms, classid):
         hm = []
@@ -119,28 +122,9 @@ class CAM(Net):
         super(CAM, self).__init__()
 
     def forward(self, x):
-        x1 = self.stage1(x).detach()
-        x2 = self.stage2(x1).detach()
-        x3 = self.stage3(x2).detach()
-        x4 = self.stage4(x3)
-        feats_loc = self.stage5(x4)  # N, 2048, KQ_FT_DIM, KQ_FT_DIM
-
-        edge1 = self.fc_edge1(x1)
-        edge2 = self.fc_edge2(x2)
-        edge3 = x3[..., :edge2.size(2), :edge2.size(3)]
-        edge4 = self.fc_edge4(x4)[..., :edge2.size(2), :edge2.size(3)]
-        feats_rel = torch.cat([edge1, edge2, edge3, edge4], dim=1) #edge1, edge2, 
-
-        K, Q = self.kq(feats_rel)
-        pred0, cam0 = self.gap(feats_loc)
-        K_d, Q_d = F.max_pool2d(K,2), F.max_pool2d(Q,2)
-        pred1, cam1 = self.relation(cam0, K_d, Q_d)
-        pred2, cam2 = self.relation(cam1, K_d, Q_d)
-        cam2 = self.upscale_cam(cam2)[..., :edge2.size(2), :edge2.size(3)]
-        pred3, cam3 = self.relation(cam2, K, Q)
-        pred4, cam4 = self.relation(cam3, K, Q)
+        pred0, cam0, preds, cams = self.infer(x)
         # x = F.conv2d(x, self.classifier.weight)
-        x = F.relu(cam4)
+        x = F.relu(cams[-1])
         
         x = x[0] + x[1].flip(-1)
 
