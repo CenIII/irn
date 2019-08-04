@@ -46,7 +46,9 @@ def validate(model, data_loader):
 
 	return
 
-def visualize(x, net, hms, label, fig, ax, cb, iterno, img_denorm, savepath):
+def visualize(x, net, hms, label, cb, iterno, img_denorm, savepath):
+	# plt.figure(1)
+	fig, ax = plt.subplots(nrows=2, ncols=2)
 	x = img_denorm(x[0].permute(1,2,0).data.cpu().numpy()).astype(np.int32)
 	hm = net.getHeatmaps(hms, label.max(dim=1)[1])
 	# plot here
@@ -65,7 +67,29 @@ def visualize(x, net, hms, label, fig, ax, cb, iterno, img_denorm, savepath):
 	
 	# plt.pause(0.02)
 	plt.savefig(os.path.join(savepath, 'visual_train_'+str(iterno)+'.png'))
+	plt.close()
 	return cb
+
+def visualize_all_classes(hms, label, iterno, savepath):
+	# plt.figure(2)
+	class_name = ['aeroplane', 'bicycle', 'bird', 'boat',
+				'bottle', 'bus', 'car', 'cat', 'chair',
+				'cow', 'diningtable', 'dog', 'horse',
+				'motorbike', 'person', 'pottedplant',
+				'sheep', 'sofa', 'train',
+				'tvmonitor']
+
+	fig, ax = plt.subplots(nrows=4, ncols=5)
+	hms = hms[-1]
+	N,W,H,C = hms.shape
+	for i in range(0, C):
+		ax[int(i/5)][int(i%5)].imshow(hms[0][...,i].data.cpu().numpy())
+		ax[int(i/5)][int(i%5)].set_title(class_name[i],color='r' if label[0][i]>0 else 'black')
+	fig.suptitle('iteration '+str(iterno))
+	
+	# plt.pause(0.02)
+	plt.savefig(os.path.join(savepath, 'visual_train_'+str(iterno)+'_cams.png'))
+	plt.close()
 
 def run(args):
 	model = getattr(importlib.import_module(args.cam_network), 'Net')()
@@ -108,10 +132,8 @@ def run(args):
 
 	timer = pyutils.Timer()
 
-	fig, ax = plt.subplots(nrows=2, ncols=2)
 	cb = [None, None, None, None]
 	img_denorm = torchutils.ImageDenorm()
-
 	for ep in range(args.cam_num_epoches):
 
 		print('Epoch %d/%d' % (ep+1, args.cam_num_epoches))
@@ -123,7 +145,8 @@ def run(args):
 
 			preds, pred0, hms = model(img)
 			if (optimizer.global_step-1)%10 == 0 and args.cam_visualize_train:
-				visualize(img, model.module, hms, label, fig, ax, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir)
+				visualize(img, model.module, hms, label, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir)
+				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir)
 			loss = torchutils.batch_multilabel_loss(preds, label, mean=True)
 			loss += F.multilabel_soft_margin_loss(pred0, label)
 			avg_meter.add({'loss1': loss.item()})

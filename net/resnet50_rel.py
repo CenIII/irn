@@ -57,13 +57,13 @@ class Net(nn.Module):
         self.gap = Gap(2048, self.n_class)
         self.upscale_cam = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
         self.relation = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=1, 
-                                rel_pattern=[(5,5),(5,3),(3,2),(5,1)]) #,(5,5)
+                                rel_pattern=[(3,2),(5,1),(5,3),(5,5)]) #,(5,5)
         
         self.backbone = nn.ModuleList([self.stage4, self.stage5]) #self.stage1, self.stage2, self.stage3, 
         self.convs = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge4, self.kq])
         self.leaf_gaps = nn.ModuleList([self.gap])
 
-    def infer(self, x):
+    def infer(self, x, train=True):
         x1 = self.stage1(x).detach()
         x2 = self.stage2(x1).detach()
         x3 = self.stage3(x2).detach()
@@ -78,7 +78,10 @@ class Net(nn.Module):
 
         K, Q = self.kq(feats_rel)
         pred0, cam0 = self.gap(feats_loc)
-        K_d, Q_d = F.max_pool2d(K,2,padding=1)[..., :cam0.size(2), :cam0.size(3)], F.max_pool2d(Q,2,padding=1)[..., :cam0.size(2), :cam0.size(3)]
+        if train:
+            K_d, Q_d = F.max_pool2d(K,2), F.max_pool2d(Q,2)
+        else:
+            K_d, Q_d = F.max_pool2d(K,2,padding=1)[..., :cam0.size(2), :cam0.size(3)], F.max_pool2d(Q,2,padding=1)[..., :cam0.size(2), :cam0.size(3)]
         pred1, cam1 = self.relation(cam0, K_d, Q_d)
         cam1 = self.upscale_cam(cam1)[..., :edge2.size(2), :edge2.size(3)]
         pred2, cam2 = self.relation(cam1, K, Q)
@@ -122,7 +125,7 @@ class CAM(Net):
         super(CAM, self).__init__()
 
     def forward(self, x):
-        pred0, cam0, preds, cams = self.infer(x)
+        pred0, cam0, preds, cams = self.infer(x, train=False)
         # x = F.conv2d(x, self.classifier.weight)
         x = F.relu(cams[-1])
         

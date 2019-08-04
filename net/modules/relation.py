@@ -141,9 +141,7 @@ class Relation(nn.Module):
         N = feats.shape[0]
         feats_r = []
         for ksize, dilation in self.rel_pattern:
-            nxt_feats = self.infuse(feats, K, Q, ksize, dilation)
-            feats_r.append(nxt_feats)
-            feats = nxt_feats
+            feats_r.append(self.infuse(feats, K, Q, ksize, dilation))
         feats_r = torch.stack(feats_r, dim=0).sum(0)
         pred_r = torch.mean(feats_r.view(N, self.n_class, -1), dim=2)
         return pred_r, feats_r
