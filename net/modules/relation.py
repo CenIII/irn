@@ -50,20 +50,20 @@ class KQ(nn.Module):
     def __init__(self, in_channels, kq_dim):
         super(KQ, self).__init__()
         self.k = nn.Sequential(
-            nn.Conv2d(in_channels, in_channels, (1, 1)), 
-            nn.ReLU(), 
-            nn.Conv2d(in_channels, kq_dim, (1, 1)), 
-            nn.ReLU(), 
-            nn.Conv2d(kq_dim, kq_dim, (1, 1)), 
-            nn.ReLU(), 
-            nn.Conv2d(kq_dim, kq_dim, (1, 1)), 
-            nn.ReLU(), 
-            nn.Conv2d(kq_dim, kq_dim, (1, 1)), 
-            nn.ReLU(), 
-            nn.Conv2d(kq_dim, kq_dim, (1, 1)), 
+            nn.Conv2d(in_channels, kq_dim, (1, 1),bias=False), 
+            # nn.ReLU(), 
+            # nn.Conv2d(in_channels, kq_dim, (1, 1),bias=False), 
+            # nn.ReLU(), 
+            # nn.Conv2d(kq_dim, kq_dim, (1, 1)), 
+            # nn.ReLU(), 
+            # nn.Conv2d(kq_dim, kq_dim, (1, 1)), 
+            # nn.ReLU(), 
+            # nn.Conv2d(kq_dim, kq_dim, (1, 1)), 
+            # nn.ReLU(), 
+            # nn.Conv2d(kq_dim, kq_dim, (1, 1)), 
             )
         self.q = nn.Sequential(
-            nn.Conv2d(in_channels, kq_dim, (1, 1)), 
+            nn.Conv2d(in_channels, kq_dim, (1, 1),bias=False), 
             )
         
     def forward(self, x):

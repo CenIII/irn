@@ -70,7 +70,7 @@ def visualize(x, net, hms, label, cb, iterno, img_denorm, savepath):
 	plt.close()
 	return cb
 
-def visualize_all_classes(hms, label, iterno, savepath):
+def visualize_all_classes(hms, label, iterno, savepath, origin=False):
 	# plt.figure(2)
 	class_name = ['aeroplane', 'bicycle', 'bird', 'boat',
 				'bottle', 'bus', 'car', 'cat', 'chair',
@@ -80,7 +80,7 @@ def visualize_all_classes(hms, label, iterno, savepath):
 				'tvmonitor']
 
 	fig, ax = plt.subplots(nrows=4, ncols=5)
-	hms = hms[-1]
+	hms = hms[0] if origin else hms[-1]
 	N,W,H,C = hms.shape
 	for i in range(0, C):
 		ax[int(i/5)][int(i%5)].imshow(hms[0][...,i].data.cpu().numpy())
@@ -88,7 +88,10 @@ def visualize_all_classes(hms, label, iterno, savepath):
 	fig.suptitle('iteration '+str(iterno))
 	
 	# plt.pause(0.02)
-	plt.savefig(os.path.join(savepath, 'visual_train_'+str(iterno)+'_cams.png'))
+	savename = 'visual_train_'+str(iterno)+'_cams.png'
+	if origin:
+		savename = 'visual_train_'+str(iterno)+'_orig_cams.png'
+	plt.savefig(os.path.join(savepath, savename))
 	plt.close()
 
 def run(args):
@@ -147,6 +150,7 @@ def run(args):
 			if (optimizer.global_step-1)%10 == 0 and args.cam_visualize_train:
 				visualize(img, model.module, hms, label, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir)
 				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir)
+				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir, origin=True)
 			loss = torchutils.batch_multilabel_loss(preds, label, mean=True)
 			loss += F.multilabel_soft_margin_loss(pred0, label)
 			avg_meter.add({'loss1': loss.item()})
