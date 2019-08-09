@@ -19,7 +19,7 @@ def run(args):
         cams = np.pad(cams, ((1, 0), (0, 0), (0, 0)), mode='constant', constant_values=args.cam_eval_thres)
         keys = np.pad(cam_dict['keys'] + 1, (1, 0), mode='constant')
         cls_labels = np.argmax(cams, axis=0)
-        if args.use_crf:
+        if args.cam_eval_use_crf:
             img = np.asarray(imageio.imread(args.voc12_root+"JPEGImages/"+str(id)+'.jpg')) # load the original image 
             pred = imutils.crf_inference_label(img, cls_labels, n_labels=keys.shape[0]) # pass through CRF
             cls_labels = keys[pred]
