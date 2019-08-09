@@ -5,6 +5,9 @@ import pydensecrf.densecrf as dcrf
 from pydensecrf.utils import unary_from_labels
 from PIL import Image
 
+seed = 42
+random.seed(seed)
+
 def pil_resize(img, size, order):
     if size[0] == img.shape[0] and size[1] == img.shape[1]:
         return img
