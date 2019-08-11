@@ -34,7 +34,7 @@ def validate(model, data_loader):
 
 			# x = model(img)
 			# loss1 = torchutils.batch_multilabel_loss(x, label)
-			preds, pred0, hms = model(img)
+			preds, pred0, hms = model(img, label)
 			loss1 = torchutils.batch_multilabel_loss(preds, label, mean=True)
 			loss1 += F.multilabel_soft_margin_loss(pred0, label)
 
@@ -146,7 +146,7 @@ def run(args):
 			img = pack['img'].cuda()
 			label = pack['label'].cuda(non_blocking=True)
 
-			preds, pred0, hms = model(img)
+			preds, pred0, hms = model(img, label)
 			if (optimizer.global_step-1)%10 == 0 and args.cam_visualize_train:
 				visualize(img, model.module, hms, label, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir)
 				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir)
