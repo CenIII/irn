@@ -55,8 +55,10 @@ class Net(nn.Module):
         
         self.gap = Gap(2048, self.n_class)
         self.upscale_cam = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
-        self.relation = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=1, 
-                                rel_pattern=[(3,2),(5,1),(5,3),(5,5)]) 
+        self.relation0 = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=1, 
+                                rel_pattern=[(3,2),(5,1),(5,3)]) 
+        self.relation1 = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=1, 
+                                rel_pattern=[(5,5),(3,7),(3,12)]) #(3,2),(5,1),
         self.backbone = nn.ModuleList([self.stage4, self.stage5]) #self.stage1, self.stage2, self.stage3, 
         self.convs = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge4, self.kq])
         self.leaf_gaps = nn.ModuleList([self.gap])
@@ -80,17 +82,24 @@ class Net(nn.Module):
             K_d, Q_d = F.max_pool2d(K,2), F.max_pool2d(Q,2)
         else:
             K_d, Q_d = F.max_pool2d(K,2,padding=1)[..., :cam0.size(2), :cam0.size(3)], F.max_pool2d(Q,2,padding=1)[..., :cam0.size(2), :cam0.size(3)]
-        pred1, cam1 = self.relation(cam0, K_d, Q_d)
+        
+        # head 0
+        pred1, cam1 = self.relation0(cam0, K_d, Q_d)
         cam1 = self.upscale_cam(cam1)[..., :edge2.size(2), :edge2.size(3)]
-        pred2, cam2 = self.relation(cam1, K, Q)
+        pred2, cam2 = self.relation0(cam1, K, Q)
 
-        return pred0, cam0, [pred1,pred2], [cam1,cam2]
+        # head 1
+        pred3, cam3 = self.relation1(cam0, K_d, Q_d)
+        cam3 = self.upscale_cam(cam3)[..., :edge2.size(2), :edge2.size(3)]
+        pred4, cam4 = self.relation1(cam3, K, Q)
+
+        return pred0, cam0, [pred1,pred3,pred2,pred4], [cam1,cam3,cam2,cam4]
 
     def forward(self, x):
 
         pred0, cam0, preds, cams = self.infer(x)
 
-        hms = self.save_hm(cam0, cams[0], cams[-1])
+        hms = self.save_hm(cam0, cams[-2], cams[-1])
         
         return preds, pred0, hms
 
@@ -125,7 +134,8 @@ class CAM(Net):
     def forward(self, x):
         pred0, cam0, preds, cams = self.infer(x, train=False)
         # x = F.conv2d(x, self.classifier.weight)
-        x = F.relu(cams[-1])
+        mean_cam = cams[-1]+cams[-2]
+        x = F.relu(mean_cam)
         
         x = x[0] + x[1].flip(-1)
 
