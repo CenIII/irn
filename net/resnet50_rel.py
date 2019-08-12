@@ -6,7 +6,7 @@ from net import resnet50
 
 from .modules import Gap, KQ, Relation
 
-KQ_DIM = 32
+KQ_DIM = 8
 
 class Net(nn.Module):
 
