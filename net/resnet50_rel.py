@@ -6,7 +6,7 @@ from net import resnet50
 
 from .modules import Gap, KQ, Relation
 
-KQ_DIM = 8
+KQ_DIM = 32
 
 class Net(nn.Module):
 
@@ -130,3 +130,38 @@ class CAM(Net):
         x = x[0] + x[1].flip(-1)
 
         return x
+
+class VIS(Net):
+
+    def __init__(self):
+        super(VIS, self).__init__()
+    
+    def infer_vis(self, x, train=True):
+        x1 = self.stage1(x).detach()
+        x2 = self.stage2(x1).detach()
+        x3 = self.stage3(x2).detach()
+        x4 = self.stage4(x3)
+        feats_loc = self.stage5(x4)  # N, 2048, KQ_FT_DIM, KQ_FT_DIM
+
+        # edge1 = self.fc_edge1(x1)
+        # edge2 = self.fc_edge2(x2)
+        # edge3 = x3[..., :edge2.size(2), :edge2.size(3)]
+        # edge4 = self.fc_edge4(x4)[..., :edge2.size(2), :edge2.size(3)]
+        # feats_rel = torch.cat([edge1, edge2, edge3, edge4], dim=1) #edge1, edge2, 
+
+        # K, Q = self.kq(feats_rel)
+        pred0, cam0 = self.gap(feats_loc)
+        # if train:
+        #     K_d, Q_d = F.max_pool2d(K,2), F.max_pool2d(Q,2)
+        # else:
+        #     K_d, Q_d = F.max_pool2d(K,2,padding=1)[..., :cam0.size(2), :cam0.size(3)], F.max_pool2d(Q,2,padding=1)[..., :cam0.size(2), :cam0.size(3)]
+        # pred1, cam1 = self.relation(cam0, K_d, Q_d)
+        # cam1 = self.upscale_cam(cam1)[..., :edge2.size(2), :edge2.size(3)]
+        # pred2, cam2 = self.relation(cam1, K, Q)
+
+        return cam0 #pred0, cam0, [pred1,pred2], [cam1,cam2],
+
+    def forward(self, x):
+        feats = self.infer_vis(x, train=False)
+
+        return feats
