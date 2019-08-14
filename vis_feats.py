@@ -24,7 +24,9 @@ class_name = ['aeroplane', 'bicycle', 'bird', 'boat',
 # print('Cumulative explained variation for 50 principal components: {}'.format(np.sum(pca_50.explained_variance_ratio_)))
 
 tsne = TSNE(n_components=2, verbose=1, perplexity=40, init='pca', n_iter=500) #perplexity=40,
-tsne_results = tsne.fit_transform(np.array(featDict['dis_ft'])) #np.array(featDict['dis_ft'])#
+x = np.array(featDict['dis_ft'])
+x = (x / np.linalg.norm(x,axis=1)[:,None])*10
+tsne_results = tsne.fit_transform(x) #np.array(featDict['dis_ft'])#
 # print('t-SNE done! Time elapsed: {} seconds'.format(time.time()-time_start))
 
 # df_subset['tsne-2d-one'] = tsne_results[:,0]
