@@ -51,57 +51,57 @@ def get_dis_ft(feats,cams,keys):
 		cnt += 1
 	return mean_ft_list, var_ft_list
 
-def get_undis_ft(feats, pred, label, keys):
-	D,H,W = feats.shape
-	mean_ft_list = []
-	var_ft_list = []
-	feats_flat = np.reshape(feats,(D,-1))
-	cnt = 1
-	for k in keys:
-		mask = pred[cnt] #(pred==k).astype(np.int)
-		mask = cv2.resize(mask,dsize=(W,H),interpolation=cv2.INTER_NEAREST)
-		mask_flat = np.reshape(mask,(-1))
-
-		mask_l = (label==k).astype(np.int)
-		mask_l = cv2.resize(mask_l,dsize=(W,H),interpolation=cv2.INTER_NEAREST)
-		mask_l_flat = np.reshape(mask_l,(-1))
-		
-		nz_indices = np.nonzero(mask_l_flat)[0] # FIXME: what if empty? 
-		if len(nz_indices)==0:
-			return None, None
-		nz_feats = feats_flat[:,nz_indices]
-		weights = ((1-mask_flat)*mask_l_flat)[nz_indices]+1e-5
-		
-		mean_ft = (nz_feats*weights[None,:]).sum(axis=1)/weights.sum()
-		mean_ft_list.append(mean_ft)
-		var_ft = np.average((nz_feats-mean_ft[:,None])**2, weights=weights, axis=1)
-		var_ft_list.append(var_ft)
-		cnt += 1
-	return mean_ft_list, var_ft_list
-
 # def get_undis_ft(feats, pred, label, keys):
 # 	D,H,W = feats.shape
 # 	mean_ft_list = []
 # 	var_ft_list = []
 # 	feats_flat = np.reshape(feats,(D,-1))
+# 	cnt = 1
 # 	for k in keys:
-# 		mask = (pred==k).astype(np.int)
+# 		mask = pred[cnt] #(pred==k).astype(np.int)
 # 		mask = cv2.resize(mask,dsize=(W,H),interpolation=cv2.INTER_NEAREST)
 # 		mask_flat = np.reshape(mask,(-1))
+
 # 		mask_l = (label==k).astype(np.int)
 # 		mask_l = cv2.resize(mask_l,dsize=(W,H),interpolation=cv2.INTER_NEAREST)
 # 		mask_l_flat = np.reshape(mask_l,(-1))
-# 		tmp = mask_l_flat - mask_flat
-# 		tmp[tmp<=0] = 0
-# 		nz_indices = np.nonzero(tmp)[0] # FIXME: what if empty? 
+		
+# 		nz_indices = np.nonzero(mask_l_flat)[0] # FIXME: what if empty? 
 # 		if len(nz_indices)==0:
 # 			return None, None
 # 		nz_feats = feats_flat[:,nz_indices]
-# 		mean_ft = nz_feats.mean(axis=1)
+# 		weights = ((1-mask_flat)*mask_l_flat)[nz_indices]+1e-5
+		
+# 		mean_ft = (nz_feats*weights[None,:]).sum(axis=1)/weights.sum()
 # 		mean_ft_list.append(mean_ft)
-# 		var_ft = nz_feats.var(axis=1)
+# 		var_ft = np.average((nz_feats-mean_ft[:,None])**2, weights=weights, axis=1)
 # 		var_ft_list.append(var_ft)
+# 		cnt += 1
 # 	return mean_ft_list, var_ft_list
+
+def get_undis_ft(feats, pred, label, keys):
+	D,H,W = feats.shape
+	mean_ft_list = []
+	var_ft_list = []
+	feats_flat = np.reshape(feats,(D,-1))
+	for k in keys:
+		mask = (pred==k).astype(np.int)
+		mask = cv2.resize(mask,dsize=(W,H),interpolation=cv2.INTER_NEAREST)
+		mask_flat = np.reshape(mask,(-1))
+		mask_l = (label==k).astype(np.int)
+		mask_l = cv2.resize(mask_l,dsize=(W,H),interpolation=cv2.INTER_NEAREST)
+		mask_l_flat = np.reshape(mask_l,(-1))
+		tmp = mask_l_flat - mask_flat
+		tmp[tmp<=0] = 0
+		nz_indices = np.nonzero(tmp)[0] # FIXME: what if empty? 
+		if len(nz_indices)==0:
+			return None, None
+		nz_feats = feats_flat[:,nz_indices]
+		mean_ft = nz_feats.mean(axis=1)
+		mean_ft_list.append(mean_ft)
+		var_ft = nz_feats.var(axis=1)
+		var_ft_list.append(var_ft)
+	return mean_ft_list, var_ft_list
 
 def get_bg_ft(feats, label):
 	D,H,W = feats.shape
