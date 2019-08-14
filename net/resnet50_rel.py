@@ -52,14 +52,17 @@ class Net(nn.Module):
 
         self.n_class = 20
         self.kq = KQ(64+256+512+1024, KQ_DIM) #512+1024
-        
-        self.gap = Gap(2048, self.n_class)
+        self.bottleneck = nn.Sequential(
+                        nn.Conv2d(2048,8,1,bias=False),
+                        # nn.GroupNorm(2, 2)
+                        )
+        self.gap = Gap(8, self.n_class)
         self.upscale_cam = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
         self.relation = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=1, 
                                 rel_pattern=[(3,2),(5,1),(5,3),(5,5)]) 
         self.backbone = nn.ModuleList([self.stage4, self.stage5]) #self.stage1, self.stage2, self.stage3, 
         self.convs = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge4, self.kq])
-        self.leaf_gaps = nn.ModuleList([self.gap])
+        self.leaf_gaps = nn.ModuleList([self.bottleneck, self.gap])
 
     def infer(self, x, train=True):
         x1 = self.stage1(x).detach()
@@ -68,29 +71,31 @@ class Net(nn.Module):
         x4 = self.stage4(x3)
         feats_loc = self.stage5(x4)  # N, 2048, KQ_FT_DIM, KQ_FT_DIM
 
-        edge1 = self.fc_edge1(x1)
-        edge2 = self.fc_edge2(x2)
-        edge3 = x3[..., :edge2.size(2), :edge2.size(3)]
-        edge4 = self.fc_edge4(x4)[..., :edge2.size(2), :edge2.size(3)]
-        feats_rel = torch.cat([edge1, edge2, edge3, edge4], dim=1) #edge1, edge2, 
+        # edge1 = self.fc_edge1(x1)
+        # edge2 = self.fc_edge2(x2)
+        # edge3 = x3[..., :edge2.size(2), :edge2.size(3)]
+        # edge4 = self.fc_edge4(x4)[..., :edge2.size(2), :edge2.size(3)]
+        # feats_rel = torch.cat([edge1, edge2, edge3, edge4], dim=1) #edge1, edge2, 
 
-        K, Q = self.kq(feats_rel)
-        pred0, cam0 = self.gap(feats_loc)
-        if train:
-            K_d, Q_d = F.max_pool2d(K,2), F.max_pool2d(Q,2)
-        else:
-            K_d, Q_d = F.max_pool2d(K,2,padding=1)[..., :cam0.size(2), :cam0.size(3)], F.max_pool2d(Q,2,padding=1)[..., :cam0.size(2), :cam0.size(3)]
-        pred1, cam1 = self.relation(cam0, K_d, Q_d)
-        cam1 = self.upscale_cam(cam1)[..., :edge2.size(2), :edge2.size(3)]
-        pred2, cam2 = self.relation(cam1, K, Q)
+        # K, Q = self.kq(feats_rel)
+        feats_bn = self.bottleneck(feats_loc)
+        feats_bn = F.normalize(feats_bn,dim=1)*10
+        pred0, cam0 = self.gap(feats_bn)
+        # if train:
+        #     K_d, Q_d = F.max_pool2d(K,2), F.max_pool2d(Q,2)
+        # else:
+        #     K_d, Q_d = F.max_pool2d(K,2,padding=1)[..., :cam0.size(2), :cam0.size(3)], F.max_pool2d(Q,2,padding=1)[..., :cam0.size(2), :cam0.size(3)]
+        # pred1, cam1 = self.relation(cam0, K_d, Q_d)
+        # cam1 = self.upscale_cam(cam1)[..., :edge2.size(2), :edge2.size(3)]
+        # pred2, cam2 = self.relation(cam1, K, Q)
 
-        return pred0, cam0, [pred1,pred2], [cam1,cam2]
+        return pred0, cam0, [],[] #[pred1,pred2], [cam1,cam2]
 
     def forward(self, x):
 
         pred0, cam0, preds, cams = self.infer(x)
 
-        hms = self.save_hm(cam0, cams[0], cams[-1])
+        hms = None #self.save_hm(cam0, cams[0], cams[-1])
         
         return preds, pred0, hms
 
@@ -125,7 +130,7 @@ class CAM(Net):
     def forward(self, x):
         pred0, cam0, preds, cams = self.infer(x, train=False)
         # x = F.conv2d(x, self.classifier.weight)
-        x = F.relu(cams[-1])
+        x = F.relu(cam0)
         
         x = x[0] + x[1].flip(-1)
 
@@ -150,7 +155,11 @@ class VIS(Net):
         # feats_rel = torch.cat([edge1, edge2, edge3, edge4], dim=1) #edge1, edge2, 
 
         # K, Q = self.kq(feats_rel)
-        pred0, cam0 = self.gap(feats_loc)
+        
+        feats_bn = self.bottleneck(feats_loc)
+        feats_bn = F.normalize(feats_bn,dim=1)*10
+        # pred0, cam0 = self.gap(feats_bn)
+        
         # if train:
         #     K_d, Q_d = F.max_pool2d(K,2), F.max_pool2d(Q,2)
         # else:
@@ -159,7 +168,7 @@ class VIS(Net):
         # cam1 = self.upscale_cam(cam1)[..., :edge2.size(2), :edge2.size(3)]
         # pred2, cam2 = self.relation(cam1, K, Q)
 
-        return cam0 #pred0, cam0, [pred1,pred2], [cam1,cam2],
+        return feats_bn #pred0, cam0, [pred1,pred2], [cam1,cam2],
 
     def forward(self, x):
         feats = self.infer_vis(x, train=False)

@@ -12,24 +12,47 @@ import importlib
 import cv2
 import pickle
 import torch.nn.functional as F
+from voc12.dataloader import TorchvisionNormalize
+from misc import imutils
+
+# def get_dis_ft(feats,pred,keys):
+# 	D,H,W = feats.shape
+# 	mean_ft_list = []
+# 	var_ft_list = []
+# 	feats_flat = np.reshape(feats,(D,-1))
+# 	for k in keys:
+# 		mask = (pred==k).astype(np.int)
+# 		mask = cv2.resize(mask,dsize=(W,H),interpolation=cv2.INTER_NEAREST)
+# 		mask_flat = np.reshape(mask,(-1))
+# 		nz_indices = np.nonzero(mask_flat)[0]
+# 		if len(nz_indices)==0:
+# 			return None, None
+# 		nz_feats = feats_flat[:,nz_indices]
+# 		mean_ft = nz_feats.mean(axis=1)
+# 		mean_ft_list.append(mean_ft)
+# 		var_ft = nz_feats.var(axis=1)
+# 		var_ft_list.append(var_ft)
+# 	return mean_ft_list, var_ft_list
 
 def get_dis_ft(feats,pred,keys):
 	D,H,W = feats.shape
 	mean_ft_list = []
 	var_ft_list = []
 	feats_flat = np.reshape(feats,(D,-1))
+	cnt = 1
 	for k in keys:
-		mask = (pred==k).astype(np.int)
+		mask = pred[cnt] #(pred==k).astype(np.int)
 		mask = cv2.resize(mask,dsize=(W,H),interpolation=cv2.INTER_NEAREST)
 		mask_flat = np.reshape(mask,(-1))
-		nz_indices = np.nonzero(mask_flat)[0]
-		if len(nz_indices)==0:
-			return None, None
-		nz_feats = feats_flat[:,nz_indices]
-		mean_ft = nz_feats.mean(axis=1)
+		# nz_indices = np.argmax(mask_flat)
+		# if len(nz_indices)==0:
+		# 	return None, None
+		# nz_feats = feats_flat[:,nz_indices]
+		mean_ft = (feats_flat*mask_flat[None,:]).sum(axis=1)/mask_flat.sum() #nz_feats#.mean(axis=1) #
 		mean_ft_list.append(mean_ft)
-		var_ft = nz_feats.var(axis=1)
+		var_ft = mean_ft #nz_feats.var(axis=1)
 		var_ft_list.append(var_ft)
+		cnt += 1
 	return mean_ft_list, var_ft_list
 
 def get_undis_ft(feats, pred, label, keys):
@@ -64,7 +87,7 @@ def run(args):
 	model.load_state_dict(torch.load(args.cam_weights_name + '.pth'), strict=True)
 	model.eval()
 	model = model.cuda()
-
+	img_normal = TorchvisionNormalize()
 	dataset = VOCSemanticSegmentationDataset(split=args.chainer_eval_set, data_dir=args.voc12_root)
 	labels = [dataset.get_example_by_keys(i, (1,))[0] for i in range(len(dataset))]
 	
@@ -75,12 +98,15 @@ def run(args):
 	for i in qdar:
 		id = dataset.ids[i]
 		# get image
-		img = torch.from_numpy(dataset._get_image(i)).cuda().unsqueeze(0)
+		img = dataset._get_image(i)
+		img = img_normal(np.moveaxis(img,0,2))
+		img = imutils.HWC_to_CHW(img)
+		img = torch.from_numpy(img).cuda().unsqueeze(0)
 		# pass forward and get feats
 		feats = model(img).squeeze()#.data.cpu().numpy()
-		feats = F.normalize(feats,dim=0).data.cpu().numpy()*10
+		feats = feats.data.cpu().numpy() #*10
 		# TODO: get cam from original results
-		cam_dict = np.load(os.path.join('./exp/original_cam/result/cam/', id + '.npy'), allow_pickle=True).item()
+		cam_dict = np.load(os.path.join(args.cam_out_dir, id + '.npy'), allow_pickle=True).item() #'./exp/original_cam/result/cam/'
 		cams = cam_dict['high_res']
 		cams = np.pad(cams, ((1, 0), (0, 0), (0, 0)), mode='constant', constant_values=args.cam_eval_thres)
 		keys = np.pad(cam_dict['keys'] + 1, (1, 0), mode='constant')
@@ -94,7 +120,7 @@ def run(args):
 		
 		# for this image, get 1. discri mean feat vec, 2. un-discri mean feat vec, variance, 3. back mean feat vec., variance
 		
-		mean_dis_ft, var_dis_ft = get_dis_ft(feats,cls_labels,keys[1:])  # two lists
+		mean_dis_ft, var_dis_ft = get_dis_ft(feats,cams,keys[1:])  # two lists
 		mean_undis_ft, var_undis_ft = get_undis_ft(feats,labels[i],cls_labels,keys[1:])  # two lists
 		if not (mean_dis_ft is None or mean_undis_ft is None):
 			featDict['dis_ft'] += mean_dis_ft
@@ -109,7 +135,7 @@ def run(args):
   
 		preds.append(cls_labels.copy())
 
-	with open('featDict_cam_norm.pkl', 'wb') as f:
+	with open('featDict.pkl', 'wb') as f:
 		pickle.dump(featDict, f)
 
 	confusion = calc_semantic_segmentation_confusion(preds, labels)
