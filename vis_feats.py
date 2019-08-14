@@ -13,18 +13,23 @@ import matplotlib.colors as mcolors
 with open('featDict.pkl','rb') as f:
 	featDict = pickle.load(f)
 
-
+class_name = ['aeroplane', 'bicycle', 'bird', 'boat',
+	'bottle', 'bus', 'car', 'cat', 'chair',
+	'cow', 'diningtable', 'dog', 'horse',
+	'motorbike', 'person', 'pottedplant',
+	'sheep', 'sofa', 'train',
+	'tvmonitor']
 # pca_50 = PCA(n_components=50)
 # pca_result_50 = pca_50.fit_transform(featDict['dis_ft'])
 # print('Cumulative explained variation for 50 principal components: {}'.format(np.sum(pca_50.explained_variance_ratio_)))
 
-tsne = TSNE(n_components=2, verbose=1, perplexity=30, init='pca', n_iter=300) #perplexity=40,
+tsne = TSNE(n_components=2, verbose=1, perplexity=40, init='pca', n_iter=500) #perplexity=40,
 tsne_results = tsne.fit_transform(np.array(featDict['dis_ft'])) #np.array(featDict['dis_ft'])#
 # print('t-SNE done! Time elapsed: {} seconds'.format(time.time()-time_start))
 
 # df_subset['tsne-2d-one'] = tsne_results[:,0]
 # df_subset['tsne-2d-two'] = tsne_results[:,1]
-plt.figure(figsize=(16,16))
+plt.figure(figsize=(16,20))
 # sns.scatterplot(
 #     x="tsne-2d-one", y="tsne-2d-two",
 #     hue="y",
@@ -47,8 +52,8 @@ for g in np.unique(group):
 	# if cnt>3:
 	# 	break
 	ix = np.where(group == g)
-	ax.scatter(scatter_x[ix], scatter_y[ix], c = cdict[g], label = g, s = 2)
+	ax.scatter(scatter_x[ix], scatter_y[ix], c = cdict[g], label = class_name[g-1], s = 2)
 	cnt+=1
-ax.legend()
+ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
 # plt.show()
-plt.savefig('feats_vis.png')
+plt.savefig('feats_vis.png',bbox_inches='tight')
