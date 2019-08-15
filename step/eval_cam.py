@@ -51,14 +51,14 @@ def get_dis_ft(feats,cams,keys):
 		cnt += 1
 	return mean_ft_list, var_ft_list
 
-# def get_undis_ft(feats, pred, label, keys):
+# def get_undis_ft(feats, cams, label, keys):
 # 	D,H,W = feats.shape
 # 	mean_ft_list = []
 # 	var_ft_list = []
 # 	feats_flat = np.reshape(feats,(D,-1))
 # 	cnt = 1
 # 	for k in keys:
-# 		mask = pred[cnt] #(pred==k).astype(np.int)
+# 		mask = cams[cnt] #(pred==k).astype(np.int)
 # 		mask = cv2.resize(mask,dsize=(W,H),interpolation=cv2.INTER_NEAREST)
 # 		mask_flat = np.reshape(mask,(-1))
 
@@ -161,7 +161,7 @@ def run(args):
 		# for this image, get 1. discri mean feat vec, 2. un-discri mean feat vec, variance, 3. back mean feat vec., variance
 		
 		mean_dis_ft, var_dis_ft = get_dis_ft(feats,cams,keys[1:])  # two lists
-		mean_undis_ft, var_undis_ft = get_undis_ft(feats,labels[i],cls_labels,keys[1:])  # two lists
+		mean_undis_ft, var_undis_ft = get_undis_ft(feats,cls_labels,labels[i],keys[1:])  # two lists
 		if not (mean_dis_ft is None or mean_undis_ft is None):
 			featDict['dis_ft'] += mean_dis_ft
 			featDict['dis_var'] += var_dis_ft
