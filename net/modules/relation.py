@@ -168,7 +168,7 @@ class BiInfusion(nn.Module):
         
     def make_att(self,K,Q,ksize,dilation):
         inf_att = self.get_infuse_att(K,Q,ksize,dilation) #[3, 1, 9, 2048]
-        dif_att = self.get_diffuse_att(K,Q,ksize,dilation)
+        dif_att = self.get_diffuse_att(Q,K,ksize,dilation)
         dif_att = torch.flip(dif_att,dims=(2,))
         # XXX: normalize or not?
         att = F.normalize(inf_att * dif_att, dim=2, p=1)
