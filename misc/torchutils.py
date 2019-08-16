@@ -145,7 +145,7 @@ def col2im_indices(cols, x_shape, field_height=3, field_width=3, padding=1,
     cols_sliced = cols_reshaped.view(N,C,-1,H*W).permute(2,0,1,3).contiguous().view(field_height * field_width,-1) # [4, 64, 9, 15376]
 
     for pt in range(field_height * field_width):
-        x_padded[ll[pt],kk[pt],ii[pt],jj[pt]] += cols_sliced[pt]
+        x_padded[ll[pt],kk[pt],ii[pt],jj[pt]] = cols_sliced[pt]
     
     if padding == 0:
         return x_padded
