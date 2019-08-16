@@ -151,6 +151,33 @@ def col2im_indices(cols, x_shape, field_height=3, field_width=3, padding=1,
         return x_padded
     return x_padded[:, :, padding:-padding, padding:-padding]
 
+def col2im_indices_unsum(cols, x_shape, field_height=3, field_width=3, padding=1,
+                   stride=1, dilate=1):
+    """ An implementation of col2im based on fancy indexing and np.add.at """
+    N, C, H, W = x_shape
+    H_padded, W_padded = H + 2 * padding, W + 2 * padding
+    x_padded = torch.zeros((N, C, field_width*field_height, H_padded, W_padded)).type(device.FloatTensor)
+    k, i, j = get_im2col_indices(x_shape, field_height, field_width, padding,
+                                stride,dilate)
+    cols_reshaped = cols.view(C * field_height * field_width, -1, N)
+    cols_reshaped = cols_reshaped.permute(2, 0, 1) #[4, 576, 15376]
+    # np.add.at(x_padded, (slice(None), k, i, j), cols_reshaped)
+    
+    ll = torch.from_numpy(np.arange(N))[:,None,None].repeat(1,C* field_height * field_width,H*W).view(N,C,-1,H*W).permute(2,0,1,3).contiguous().view(field_height * field_width,-1) # [4, 64, 9, 15376]
+    kk = torch.from_numpy(k)[None,:,:].repeat(N,1,H*W).view(N,C,-1,H*W).permute(2,0,1,3).contiguous().view(field_height * field_width,-1) # [4, 64, 9, 15376]
+    ii = torch.from_numpy(i)[None,:,:].repeat(N,1,1).view(N,C,-1,H*W).permute(2,0,1,3).contiguous().view(field_height * field_width,-1) # [4, 64, 9, 15376]
+    jj = torch.from_numpy(j)[None,:,:].repeat(N,1,1).view(N,C,-1,H*W).permute(2,0,1,3).contiguous().view(field_height * field_width,-1) # [4, 64, 9, 15376]
+    cols_sliced = cols_reshaped.view(N,C,-1,H*W).permute(2,0,1,3).contiguous().view(field_height * field_width,-1) # [4, 64, 9, 15376]
+
+    # import pdb;pdb.set_trace()
+    # TODO: figure out the order of H*W's expanding
+    for pt in range(field_height * field_width):
+        x_padded[ll[pt],kk[pt],pt,ii[pt],jj[pt]] += cols_sliced[pt]
+    
+    if padding == 0:
+        return x_padded
+    return x_padded[:, :, :, padding:-padding, padding:-padding]
+
 class ImageDenorm():
     def __init__(self, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
         self.mean = mean

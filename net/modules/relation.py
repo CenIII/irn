@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from misc.torchutils import im2col_indices, col2im_indices
+from misc.torchutils import im2col_indices, col2im_indices, col2im_indices_unsum
 if torch.cuda.is_available():
 	import torch.cuda as device
 else:
@@ -130,11 +130,65 @@ class Diffusion(nn.Module):
         V_new = col2im_indices(V_cols, V.shape, Hf, Wf, padding, 1, dilation)
         return V_new
 
+class BiInfusion(nn.Module):
+    def __init__(self, v_dim, kq_dim, n_heads=1, kernel_size=5, dilation=3):
+        super(BiInfusion, self).__init__()  
+        assert(kq_dim % n_heads == 0)
+        self.v_dim = v_dim
+        self.kq_dim = kq_dim
+        self.n_heads = n_heads
+        self.h_dim = int(kq_dim / n_heads)
+    
+    def get_diffuse_att(self,K,Q,ksize,dilation):
+        N, D, H, W = K.shape # 8, 32, 124, 124
+        Hf = ksize
+        Wf = ksize
+        padding = int(ksize/2)*dilation
+        K_trans = im2col_indices(K, Hf, Wf, padding, 1, dilation) # (800, 123008)
+        Q_trans = Q.permute(1, 2, 3, 0).contiguous().view(D, -1) # (32, 123008)
+        tmp = (K_trans.view(D, -1, K_trans.shape[-1]) * Q_trans.unsqueeze(1)).view(self.n_heads, self.h_dim, Hf*Wf, -1)
+        tmp = tmp.sum(1, True) # (4, 1, 5*5, 123008)
+        att = torch.softmax(tmp, 2) # (4, 1, 25, 123008)
+        att_cols = att.view(self.n_heads*Hf*Wf, -1) # (n_heads*h_dim*25, 123008)
+        att_new = col2im_indices_unsum(att_cols, (N,self.n_heads,H,W), Hf, Wf, padding, 1, dilation)
+        att_new = att_new.permute(1, 2, 3, 4, 0).contiguous().view(self.n_heads,1,Hf*Wf, -1)+1e-5
+        return att_new
+
+    def get_infuse_att(self,K,Q,ksize,dilation):
+        N, D, H, W = K.shape # 8, 32, 124, 124
+        padding = int(ksize/2)*dilation
+        Hf = ksize
+        Wf = ksize
+        K_trans = im2col_indices(K, Hf, Wf, padding, 1, dilation) # (3200, 38440)
+        Q_trans = Q.permute(1, 2, 3, 0).contiguous().view(self.n_heads, self.h_dim, -1) # (128, 38440)
+        tmp = (K_trans.view(self.n_heads, self.h_dim, -1, K_trans.shape[-1]) * Q_trans.unsqueeze(2)).view(self.n_heads, self.h_dim, Hf*Wf, -1)
+        tmp = tmp.sum(1, True) # (4, 1, 5*5, 38440) 
+        att = torch.softmax(tmp, 2) # (4, 1, 25, 38440)
+        return att
+        
+    def make_att(self,K,Q,ksize,dilation):
+        inf_att = self.get_infuse_att(K,Q,ksize,dilation) #[3, 1, 9, 2048]
+        dif_att = self.get_diffuse_att(K,Q,ksize,dilation)
+        dif_att = torch.flip(dif_att,dims=(2,))
+        # XXX: normalize or not?
+        att = F.normalize(inf_att * dif_att, dim=2, p=1)
+        return att 
+
+    def forward(self, V, K, Q, ksize, dilation): # NxDxHxW
+        N, D, H, W = V.shape # 8, 32, 124, 124
+        padding = int(ksize/2)*dilation
+        Hf = ksize
+        Wf = ksize
+        att = self.make_att(K,Q,ksize,dilation)
+        V_trans = im2col_indices(V, Hf, Wf, padding, 1, dilation).view(1, self.v_dim, Hf*Wf, -1)
+        out = (V_trans * att).sum(2).sum(0).view(D, H, W, N).permute(3, 0, 1, 2)/(self.n_heads)
+        return out
+
 class Relation(nn.Module):
     def __init__(self, in_channels, kq_dim, n_class, n_heads=1, rel_pattern=[(5, 3)]):
         super(Relation, self).__init__()
         self.rel_pattern = rel_pattern
-        self.infuse = Infusion(in_channels, kq_dim, n_heads=n_heads)
+        self.infuse = BiInfusion(in_channels, kq_dim, n_heads=n_heads)
         self.n_class = n_class
         
     def forward(self, feats, K, Q):
