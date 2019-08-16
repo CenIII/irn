@@ -80,9 +80,9 @@ class Net(nn.Module):
             K_d, Q_d = F.max_pool2d(K,2), F.max_pool2d(Q,2)
         else:
             K_d, Q_d = F.max_pool2d(K,2,padding=1)[..., :cam0.size(2), :cam0.size(3)], F.max_pool2d(Q,2,padding=1)[..., :cam0.size(2), :cam0.size(3)]
-        pred1, cam1 = self.relation(cam0, K_d, Q_d, label)
+        pred1, cam1 = self.relation(cam0, K_d, Q_d)
         cam1 = self.upscale_cam(cam1)[..., :edge2.size(2), :edge2.size(3)]
-        pred2, cam2 = self.relation(cam1, K, Q, label)
+        pred2, cam2 = self.relation(cam1, K, Q)
 
         return pred0, cam0, [pred1,pred2], [cam1,cam2]
 

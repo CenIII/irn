@@ -82,7 +82,7 @@ class Infusion(nn.Module):
         self.h_dim = int(kq_dim / n_heads)
         # self.transform = nn.Conv2d(self.n_heads*self.v_dim,self.v_dim,1,bias=False)
         
-    def forward(self, V, K, Q, ksize, dilation, label): # NxDxHxW
+    def forward(self, V, K, Q, ksize, dilation): # NxDxHxW
         N, D, H, W = V.shape # 8, 32, 124, 124
         padding = int(ksize/2)*dilation
         Hf = ksize
@@ -92,13 +92,11 @@ class Infusion(nn.Module):
         Q_trans = Q.permute(1, 2, 3, 0).contiguous().view(n_heads, self.h_dim, -1) # (128, 38440)
         tmp = (K_trans.view(n_heads, self.h_dim, -1, K_trans.shape[-1]) * Q_trans.unsqueeze(2)).view(n_heads, self.h_dim, Hf*Wf, -1)
         tmp = tmp.sum(1, True)#/np.sqrt(self.h_dim) # (4, 1, 5*5, 38440) 
-        att = torch.softmax(tmp, 2) # (4, 1, 25, 38440)
-        V_trans = im2col_indices(V, Hf, Wf, padding, 1, dilation).view(1, self.v_dim, Hf*Wf, -1)
+        att = torch.softmax(tmp, 2).squeeze() # (4, 1, 25, 38440)
+        V_trans = im2col_indices(V, Hf, Wf, padding, 1, dilation).view(self.v_dim, Hf*Wf, -1)
         # out = (V_trans * att).sum(2).sum(0).view(D, H, W, N).permute(3, 0, 1, 2)/(n_heads)
-        out = (V_trans * att).sum(2).view(n_heads,D, H, W, N).permute(4, 0, 1, 2, 3)#/(n_heads)
-        label_ext = label[:,:,None,None,None]
-        out = out*label_ext
-        out = torch.sum(out,dim=1)/torch.sum(label_ext,dim=1)
+        out = (V_trans * att).sum(1).view(D, H, W, N).permute(3, 0, 1, 2)#/(n_heads)
+
         # V_cat = (V_trans * att).sum(2).view(1,self.n_heads*D,-1,1)
         # out = self.transform(V_cat).squeeze().view(D, H, W, N).permute(3, 0, 1, 2)#/(self.n_heads)
 
@@ -155,7 +153,7 @@ class Relation(nn.Module):
 
     #     return K,Q
 
-    def forward(self, feats, K, Q, label):
+    def forward(self, feats, K, Q):
         # N = feats.shape[0]
         N, D, H, W = feats.shape
         feats_r = []
@@ -164,7 +162,7 @@ class Relation(nn.Module):
         # K, Q = self.select_kq(K,Q,label)
         
         for ksize, dilation in self.rel_pattern:
-            feats_r.append(self.infuse(feats, K, Q, ksize, dilation, label))
+            feats_r.append(self.infuse(feats, K, Q, ksize, dilation))
         feats_r = torch.stack(feats_r, dim=0).sum(0)#/(self.n_heads)
         # feats_r = self.infuse.transform(feats_r).squeeze().view(D, H, W, N).permute(3, 0, 1, 2)
         pred_r = torch.mean(feats_r.view(N, self.n_class, -1), dim=2)
