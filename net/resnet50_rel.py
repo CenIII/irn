@@ -6,7 +6,7 @@ from net import resnet50
 
 from .modules import Gap, KQ, Relation
 
-KQ_DIM = 8
+KQ_DIM = 32
 
 class Net(nn.Module):
 
@@ -55,8 +55,8 @@ class Net(nn.Module):
         
         self.gap = Gap(2048, self.n_class)
         self.upscale_cam = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
-        self.relation = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=1, 
-                                rel_pattern=[(3,2),(5,1),(5,3),(5,5)]) 
+        self.relation = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=8, 
+                                rel_pattern=[(3,2),(5,1),(5,3),(5,5)]) #(3,2),
         self.backbone = nn.ModuleList([self.stage4, self.stage5]) #self.stage1, self.stage2, self.stage3, 
         self.convs = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge4, self.kq])
         self.leaf_gaps = nn.ModuleList([self.gap])
