@@ -93,9 +93,9 @@ class Infusion(nn.Module):
         inds.remove(int((ksize*ksize)/2))
         tmp = tmp.sum(1, True)[:,:,inds] #/np.sqrt(self.h_dim) # (4, 1, 5*5, 38440) 
         # import pdb;pdb.set_trace()
-        att = torch.softmax(tmp, 2) # (4, 1, 25, 38440)
-        V_trans = im2col_indices(V, Hf, Wf, padding, 1, dilation).view(1, self.v_dim, Hf*Wf, -1)[:,:,inds]
-        out = (V_trans * att).sum(2).sum(0).view(D, H, W, N).permute(3, 0, 1, 2)/(self.n_heads)
+        att = torch.softmax(tmp, 2).squeeze() # (4, 1, 25, 38440)
+        V_trans = im2col_indices(V, Hf, Wf, padding, 1, dilation).view(self.v_dim, Hf*Wf, -1)[:,inds] #1, 
+        out = (V_trans * att).sum(1).view(D, H, W, N).permute(3, 0, 1, 2)#/(self.n_heads)
         return out
 
 class Diffusion(nn.Module):
