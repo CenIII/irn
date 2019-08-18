@@ -61,6 +61,8 @@ class Net(nn.Module):
         self.backbone = nn.ModuleList([self.stage4, self.stage5]) #self.stage1, self.stage2, self.stage3, 
         self.convs = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge4]) #, self.kq
         self.leaf_gaps = nn.ModuleList([self.gap, self.bgap])
+    def get_gap_weights(self):
+        return F.normalize(self.gap.lin.weight.squeeze().detach(),dim=1)
 
     def infer(self, x, mask, train=True):
         x1 = self.stage1(x).detach()

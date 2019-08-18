@@ -36,7 +36,8 @@ def validate(model, data_loader):
 			# loss1 = torchutils.batch_multilabel_loss(x, label)
 			preds, pred0, hms = model(img, mask)
 			# loss1 = torchutils.batch_multilabel_loss(preds, label, mean=True)
-			loss1 = torchutils.multilabel_soft_pull_loss(preds[0], label)#, mean=True)
+			wts = model.module.get_gap_weights()
+			loss1 = torchutils.multilabel_reweight_loss(preds[0], label, wts)#, mean=True)
 			loss1 += F.multilabel_soft_margin_loss(pred0, label)
 
 			val_loss_meter.add({'loss1': loss1.item()})
@@ -141,7 +142,7 @@ def run(args):
 	for ep in range(args.cam_num_epoches):
 
 		print('Epoch %d/%d' % (ep+1, args.cam_num_epoches))
-
+		flag = False
 		for step, pack in enumerate(train_data_loader):
 
 			img = pack['img'].cuda()
@@ -152,7 +153,9 @@ def run(args):
 				visualize(img, model.module, hms, label, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir)
 				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir)
 				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir, origin=True)
-			loss = torchutils.multilabel_soft_pull_loss(preds[0], label) #, mean=True)
+			# import pdb;pdb.set_trace()
+			wts = model.module.get_gap_weights()
+			loss = torchutils.multilabel_reweight_loss(preds[0], label, wts, tmpflag=flag) #, mean=True)
 			loss += F.multilabel_soft_margin_loss(pred0, label)
 			avg_meter.add({'loss1': loss.item()})
 			with autograd.detect_anomaly():
@@ -162,8 +165,10 @@ def run(args):
 				# print(torch.max(model.module.gap.lin.weight.grad))
 				clip_grad_norm_(model.parameters(), 1.)
 				optimizer.step()
-
+			flag = False
 			if (optimizer.global_step-1)%100 == 0:
+				# if (optimizer.global_step-1)>0:
+				# 	flag = True
 				timer.update_progress(optimizer.global_step / max_step)
 
 				print('step:%5d/%5d' % (optimizer.global_step - 1, max_step),
@@ -174,7 +179,7 @@ def run(args):
 
 		else:
 			torch.save(model.module.state_dict(), args.cam_weights_name + '.pth')
-			validate(model, val_data_loader)
+			# validate(model, val_data_loader)
 			timer.reset_stage()
 
 	torch.save(model.module.state_dict(), args.cam_weights_name + '.pth')
