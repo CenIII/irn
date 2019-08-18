@@ -15,10 +15,16 @@ class Gap(nn.Module):
         self.lin = nn.Conv2d(in_channels,n_class,1,bias=False) #nn.Linear(in_channels, n_class, bias=False)
         self.n_class = n_class
 
-    def forward(self, x):
-        N = x.shape[0]
+    def forward(self, x, mask=None):
+        N,C,W,H = x.shape
         cam = self.lin(x) #.permute(0, 2, 3, 1)
-        pred = torch.mean(cam.view(N, self.n_class, -1), dim=2)
+        if mask is not None:
+            mask = F.interpolate(mask, (W,H), mode='bilinear',align_corners=False)[:,:1]
+            cam = cam * mask
+            pred = torch.sum(cam.view(N, self.n_class, -1), dim=2)/mask.view(N, 1, -1).sum(dim=2)
+        else:
+            pred = torch.mean(cam.view(N, self.n_class, -1), dim=2)
+        
         return pred, cam
 
     def infer_class_maps(self, x):

@@ -29,14 +29,14 @@ def validate(model, data_loader):
 	with torch.no_grad():
 		for pack in data_loader:
 			img = pack['img']
-
+			mask = pack['mask']
 			label = pack['label'].cuda(non_blocking=True)
 
 			# x = model(img)
 			# loss1 = torchutils.batch_multilabel_loss(x, label)
-			preds, pred0, hms = model(img)
+			preds, pred0, hms = model(img, mask)
 			# loss1 = torchutils.batch_multilabel_loss(preds, label, mean=True)
-			loss1 = torchutils.multilabel_soft_pull_loss(preds[0], label, mean=True)
+			loss1 = torchutils.multilabel_soft_pull_loss(preds[0], label)#, mean=True)
 			loss1 += F.multilabel_soft_margin_loss(pred0, label)
 
 			val_loss_meter.add({'loss1': loss1.item()})
@@ -145,14 +145,14 @@ def run(args):
 		for step, pack in enumerate(train_data_loader):
 
 			img = pack['img'].cuda()
+			mask = pack['mask'].cuda()
 			label = pack['label'].cuda(non_blocking=True)
-
-			preds, pred0, hms = model(img)
+			preds, pred0, hms = model(img, mask)
 			if (optimizer.global_step-1)%10 == 0 and args.cam_visualize_train:
 				visualize(img, model.module, hms, label, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir)
 				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir)
 				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir, origin=True)
-			loss = torchutils.multilabel_soft_pull_loss(preds[0], label, mean=True)
+			loss = torchutils.multilabel_soft_pull_loss(preds[0], label) #, mean=True)
 			loss += F.multilabel_soft_margin_loss(pred0, label)
 			avg_meter.add({'loss1': loss.item()})
 			with autograd.detect_anomaly():

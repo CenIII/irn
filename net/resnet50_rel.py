@@ -62,7 +62,7 @@ class Net(nn.Module):
         self.convs = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge4]) #, self.kq
         self.leaf_gaps = nn.ModuleList([self.gap, self.bgap])
 
-    def infer(self, x, train=True):
+    def infer(self, x, mask, train=True):
         x1 = self.stage1(x).detach()
         x2 = self.stage2(x1).detach()
         x3 = self.stage3(x2).detach()
@@ -77,7 +77,7 @@ class Net(nn.Module):
 
         # K, Q = self.kq(feats_rel)
         pred0, cam0 = self.gap(feats_loc)
-        pred1, cam1 = self.bgap(feats_loc.detach())
+        pred1, cam1 = self.bgap(F.normalize(feats_loc.detach(),dim=1)*10,mask=mask)
         # if train:
         #     K_d, Q_d = F.max_pool2d(K,2), F.max_pool2d(Q,2)
         # else:
@@ -88,9 +88,9 @@ class Net(nn.Module):
 
         return pred0, cam0, [pred1], [cam1]
 
-    def forward(self, x):
+    def forward(self, x, mask):
 
-        pred0, cam0, preds, cams = self.infer(x)
+        pred0, cam0, preds, cams = self.infer(x, mask)
 
         hms = self.save_hm(cam0, cams[0], cams[-1])
         

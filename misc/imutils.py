@@ -89,19 +89,23 @@ def random_crop(images, cropsize, default_values):
     box = get_random_crop_box(imgsize, cropsize)
 
     new_images = []
+    new_masks = []
     for img, f in zip(images, default_values):
 
         if len(img.shape) == 3:
             cont = np.ones((cropsize, cropsize, img.shape[2]), img.dtype)*f
+            mask = np.zeros((cropsize, cropsize, img.shape[2]), img.dtype)
         else:
             cont = np.ones((cropsize, cropsize), img.dtype)*f
+            mask = np.zeros((cropsize, cropsize), img.dtype)
         cont[box[0]:box[1], box[2]:box[3]] = img[box[4]:box[5], box[6]:box[7]]
+        mask[box[0]:box[1], box[2]:box[3]] = 1.
         new_images.append(cont)
-
+        new_masks.append(mask)
     if len(new_images) == 1:
         new_images = new_images[0]
-
-    return new_images
+        new_masks = new_masks[0]
+    return new_images, new_masks
 
 def top_left_crop(img, cropsize, default_value):
 
