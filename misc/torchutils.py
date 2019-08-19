@@ -118,6 +118,27 @@ def multilabel_soft_pull_loss(input, target, weight=None,reduction='mean'):
         raise ValueError(reduction + " is not valid")
     return ret
 
+affnMat = torch.tensor([[0,	0,	0,	1,	0,	0,	0,	0,	0,	0,	0,	0,	0,	1,	0,	0,	0,	0,	0,	0],
+[0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	1,	0,	0,	0,	0,	0,	0],
+[0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0],
+[1,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0],
+[0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0],
+[0,	0,	0,	0,	0,	0,	1,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	1,	0],
+[0,	0,	0,	0,	0,	1,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0],
+[0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	1,	0,	0,	0,	0,	1,	1,	0,	0],
+[0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	1,	0,	0,	0,	0,	0,	0,	1,	0,	0],
+[0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	1,	1,	0,	0,	0,	1,	0,	0,	0],
+[0,	0,	0,	0,	0,	0,	0,	0,	1,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0],
+[0,	0,	0,	0,	0,	0,	0,	1,	0,	1,	0,	0,	1,	0,	0,	0,	0,	0,	0,	0],
+[0,	0,	0,	0,	0,	0,	0,	0,	0,	1,	0,	1,	0,	0,	0,	0,	1,	0,	0,	0],
+[1,	1,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0],
+[0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0],
+[0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0],
+[0,	0,	0,	0,	0,	0,	0,	1,	0,	1,	0,	0,	1,	0,	0,	0,	0,	0,	0,	0],
+[0,	0,	0,	0,	0,	0,	0,	1,	1,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0],
+[0,	0,	0,	0,	0,	1,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0],
+[0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0]]).type(device.FloatTensor)
+
 def multilabel_reweight_loss(input, target, gap_weights=None,weight=None,reduction='mean',tmpflag=False):
     # type: (Tensor, Tensor, Optional[Tensor], Optional[bool], Optional[bool], str) -> Tensor
     r"""multilabel_soft_margin_loss(input, target, weight=None, size_average=None) -> Tensor
@@ -125,11 +146,17 @@ def multilabel_reweight_loss(input, target, gap_weights=None,weight=None,reducti
     """
     # if size_average is not None or reduce is not None:
     #     reduction = _Reduction.legacy_get_string(size_average, reduce)
+    
     if gap_weights is not None:
         # import pdb;pdb.set_trace()
-        zzz=gap_weights[None,:]*target[...,None]
-        aaa=torch.matmul(zzz,gap_weights.transpose(0,1))
-        wts = torch.clamp(1.-aaa.max(dim=1)[0],0,1) #[2, 20]
+        # zzz = gap_weights[None,:]*target[...,None]
+        # aaa = torch.matmul(zzz,gap_weights.transpose(0,1))
+        # tmp = torch.topk(aaa,4,dim=2)[1]
+        # aaa = aaa.scatter(2,tmp,1.)
+        # aaa[aaa<1] = 0.
+        zzz = torch.matmul(target,affnMat)
+        zzz[zzz>0] = 1.
+        wts = 1. - zzz
 
     if tmpflag:
         import pdb;pdb.set_trace()

@@ -5,6 +5,7 @@ from misc import torchutils
 from net import resnet50
 
 from .modules import Gap, KQ, Relation
+import copy 
 
 KQ_DIM = 8
 
@@ -20,6 +21,8 @@ class Net(nn.Module):
         self.stage3 = nn.Sequential(self.resnet50.layer2)
         self.stage4 = nn.Sequential(self.resnet50.layer3)
         self.stage5 = nn.Sequential(self.resnet50.layer4)
+        self.stage4b = nn.Sequential(copy.deepcopy(self.resnet50.layer3))
+        self.stage5b = nn.Sequential(copy.deepcopy(self.resnet50.layer4))
 
         # self.branch_rel = nn.Sequential(
         #     nn.Conv2d(1024, 1024, 1),
@@ -58,11 +61,11 @@ class Net(nn.Module):
         # self.relation = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=1, 
         #                         rel_pattern=[(3,2),(5,1),(5,3),(5,5)]) 
         self.bgap = Gap(2048, self.n_class)
-        self.backbone = nn.ModuleList([self.stage4, self.stage5]) #self.stage1, self.stage2, self.stage3, 
+        self.backbone = nn.ModuleList([self.stage4, self.stage5, self.stage4b, self.stage5b]) #self.stage1, self.stage2, self.stage3, 
         self.convs = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge4]) #, self.kq
         self.leaf_gaps = nn.ModuleList([self.gap, self.bgap])
     def get_gap_weights(self):
-        return F.normalize(self.gap.lin.weight.squeeze().detach(),dim=1)
+        return self.gap.lin.weight.squeeze().detach()#F.normalize(,dim=1)
 
     def infer(self, x, mask, train=True):
         x1 = self.stage1(x).detach()
@@ -70,6 +73,8 @@ class Net(nn.Module):
         x3 = self.stage3(x2).detach()
         x4 = self.stage4(x3)
         feats_loc = self.stage5(x4)  # N, 2048, KQ_FT_DIM, KQ_FT_DIM
+        x4b = self.stage4b(x3)
+        feats_loc_b = self.stage5b(x4b)  # N, 2048, KQ_FT_DIM, KQ_FT_DIM
 
         # edge1 = self.fc_edge1(x1)
         # edge2 = self.fc_edge2(x2)
@@ -78,8 +83,9 @@ class Net(nn.Module):
         # feats_rel = torch.cat([edge1, edge2, edge3, edge4], dim=1) #edge1, edge2, 
 
         # K, Q = self.kq(feats_rel)
+
         pred0, cam0 = self.gap(feats_loc)
-        pred1, cam1 = self.bgap(F.normalize(feats_loc.detach(),dim=1)*10,mask=mask)
+        pred1, cam1 = self.bgap(feats_loc_b) # F.normalize(feats_loc.detach(),dim=1)*10,mask=mask)
         # if train:
         #     K_d, Q_d = F.max_pool2d(K,2), F.max_pool2d(Q,2)
         # else:
