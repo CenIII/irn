@@ -21,8 +21,6 @@ class Net(nn.Module):
         self.stage3 = nn.Sequential(self.resnet50.layer2)
         self.stage4 = nn.Sequential(self.resnet50.layer3)
         self.stage5 = nn.Sequential(self.resnet50.layer4)
-        self.stage4b = nn.Sequential(copy.deepcopy(self.resnet50.layer3))
-        self.stage5b = nn.Sequential(copy.deepcopy(self.resnet50.layer4))
 
         # self.branch_rel = nn.Sequential(
         #     nn.Conv2d(1024, 1024, 1),
@@ -54,18 +52,17 @@ class Net(nn.Module):
         )
 
         self.n_class = 20
-        # self.kq = KQ(64+256+512+1024, KQ_DIM) #512+1024
+        self.kq = KQ(64+256+512+1024, KQ_DIM) #512+1024
         
         self.gap = Gap(2048, self.n_class)
         self.upscale_cam = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
-        # self.relation = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=1, 
-        #                         rel_pattern=[(3,2),(5,1),(5,3),(5,5)]) 
-        self.bgap = Gap(2048, self.n_class)
-        self.backbone = nn.ModuleList([self.stage4, self.stage5, self.stage4b, self.stage5b]) #self.stage1, self.stage2, self.stage3, 
-        self.convs = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge4]) #, self.kq
-        self.leaf_gaps = nn.ModuleList([self.gap, self.bgap])
-    def get_gap_weights(self):
-        return self.gap.lin.weight.squeeze().detach()#F.normalize(,dim=1)
+        self.relation = Relation(self.n_class, KQ_DIM, self.n_class, n_heads=1, 
+                                rel_pattern=[(3,2),(5,1),(5,3),(5,5)]) 
+        
+        self.backbone = nn.ModuleList([self.stage4, self.stage5]) #self.stage1, self.stage2, self.stage3, 
+        self.convs = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge4, self.kq])
+        self.leaf_gaps = nn.ModuleList([self.gap])
+        
 
     def infer(self, x, train=True):
         x1 = self.stage1(x).detach()
@@ -73,28 +70,26 @@ class Net(nn.Module):
         x3 = self.stage3(x2).detach()
         x4 = self.stage4(x3)
         feats_loc = self.stage5(x4)  # N, 2048, KQ_FT_DIM, KQ_FT_DIM
-        x4b = self.stage4b(x3)
-        feats_loc_b = self.stage5b(x4b)  # N, 2048, KQ_FT_DIM, KQ_FT_DIM
 
-        # edge1 = self.fc_edge1(x1)
-        # edge2 = self.fc_edge2(x2)
-        # edge3 = x3[..., :edge2.size(2), :edge2.size(3)]
-        # edge4 = self.fc_edge4(x4)[..., :edge2.size(2), :edge2.size(3)]
-        # feats_rel = torch.cat([edge1, edge2, edge3, edge4], dim=1) #edge1, edge2, 
+        edge1 = self.fc_edge1(x1)
+        edge2 = self.fc_edge2(x2)
+        edge3 = x3[..., :edge2.size(2), :edge2.size(3)]
+        edge4 = self.fc_edge4(x4)[..., :edge2.size(2), :edge2.size(3)]
+        feats_rel = torch.cat([edge1, edge2, edge3, edge4], dim=1) #edge1, edge2, 
 
-        # K, Q = self.kq(feats_rel)
+        K, Q = self.kq(feats_rel)
 
         pred0, cam0 = self.gap(feats_loc)
-        pred1, cam1 = self.bgap(feats_loc_b) # F.normalize(feats_loc.detach(),dim=1)*10,mask=mask)
-        # if train:
-        #     K_d, Q_d = F.max_pool2d(K,2), F.max_pool2d(Q,2)
-        # else:
-        #     K_d, Q_d = F.max_pool2d(K,2,padding=1)[..., :cam0.size(2), :cam0.size(3)], F.max_pool2d(Q,2,padding=1)[..., :cam0.size(2), :cam0.size(3)]
-        # pred1, cam1 = self.relation(cam0, K_d, Q_d)
-        # cam1 = self.upscale_cam(cam1)[..., :edge2.size(2), :edge2.size(3)]
-        # pred2, cam2 = self.relation(cam1, K, Q)
+        
+        if train:
+            K_d, Q_d = F.max_pool2d(K,2), F.max_pool2d(Q,2)
+        else:
+            K_d, Q_d = F.max_pool2d(K,2,padding=1)[..., :cam0.size(2), :cam0.size(3)], F.max_pool2d(Q,2,padding=1)[..., :cam0.size(2), :cam0.size(3)]
+        pred1, cam1 = self.relation(cam0, K_d, Q_d)
+        cam1 = self.upscale_cam(cam1)[..., :edge2.size(2), :edge2.size(3)]
+        pred2, cam2 = self.relation(cam1, K, Q)
 
-        return pred0, cam0, [pred1], [cam1]
+        return pred0, cam0, [pred1,pred2], [cam1,cam2]
 
     def forward(self, x):
 

@@ -152,9 +152,8 @@ def run(args):
 				visualize(img, model.module, hms, label, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir)
 				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir)
 				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir, origin=True)
-			wts = model.module.get_gap_weights()
-			loss = torchutils.multilabel_reweight_loss(preds[0], label, wts, tmpflag=flag) #, mean=True)
-			loss += F.multilabel_soft_margin_loss(pred0, label)
+			loss = torchutils.batch_multilabel_reweight_loss(preds[0], label, mean=True)# tmpflag=flag) #, mean=True)
+			loss += torchutils.multilabel_reweight_loss(pred0, label, tmpflag=flag))#F.multilabel_soft_margin_loss(pred0, label)
 			avg_meter.add({'loss1': loss.item()})
 			with autograd.detect_anomaly():
 				optimizer.zero_grad()
