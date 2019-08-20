@@ -29,12 +29,12 @@ def validate(model, data_loader):
 	with torch.no_grad():
 		for pack in data_loader:
 			img = pack['img']
-			mask = pack['mask']
+			# mask = pack['mask']
 			label = pack['label'].cuda(non_blocking=True)
 
 			# x = model(img)
 			# loss1 = torchutils.batch_multilabel_loss(x, label)
-			preds, pred0, hms = model(img, mask)
+			preds, pred0, hms = model(img)
 			# loss1 = torchutils.batch_multilabel_loss(preds, label, mean=True)
 			wts = model.module.get_gap_weights()
 			loss1 = torchutils.multilabel_reweight_loss(preds[0], label, wts)#, mean=True)
@@ -146,14 +146,12 @@ def run(args):
 		for step, pack in enumerate(train_data_loader):
 
 			img = pack['img'].cuda()
-			mask = pack['mask'].cuda()
 			label = pack['label'].cuda(non_blocking=True)
-			preds, pred0, hms = model(img, mask)
+			preds, pred0, hms = model(img)
 			if (optimizer.global_step-1)%10 == 0 and args.cam_visualize_train:
 				visualize(img, model.module, hms, label, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir)
 				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir)
 				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir, origin=True)
-			# import pdb;pdb.set_trace()
 			wts = model.module.get_gap_weights()
 			loss = torchutils.multilabel_reweight_loss(preds[0], label, wts, tmpflag=flag) #, mean=True)
 			loss += F.multilabel_soft_margin_loss(pred0, label)
@@ -161,8 +159,6 @@ def run(args):
 			with autograd.detect_anomaly():
 				optimizer.zero_grad()
 				loss.backward()
-				# import pdb;pdb.set_trace()
-				# print(torch.max(model.module.gap.lin.weight.grad))
 				clip_grad_norm_(model.parameters(), 1.)
 				optimizer.step()
 			flag = False

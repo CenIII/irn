@@ -29,8 +29,8 @@ def _work(process_id, model, dataset, args):
             label = pack['label'][0]
             size = pack['size']
 
-            strided_size = imutils.get_strided_size(size, 2)
-            strided_up_size = imutils.get_strided_up_size(size, 8)
+            strided_size = imutils.get_strided_size(size, 4)
+            strided_up_size = imutils.get_strided_up_size(size, 16)
 
             outputs = [model(img[0].cuda(non_blocking=True))
                        for img in pack['img']]

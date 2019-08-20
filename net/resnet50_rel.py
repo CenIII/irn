@@ -67,7 +67,7 @@ class Net(nn.Module):
     def get_gap_weights(self):
         return self.gap.lin.weight.squeeze().detach()#F.normalize(,dim=1)
 
-    def infer(self, x, mask, train=True):
+    def infer(self, x, train=True):
         x1 = self.stage1(x).detach()
         x2 = self.stage2(x1).detach()
         x3 = self.stage3(x2).detach()
@@ -96,9 +96,9 @@ class Net(nn.Module):
 
         return pred0, cam0, [pred1], [cam1]
 
-    def forward(self, x, mask):
+    def forward(self, x):
 
-        pred0, cam0, preds, cams = self.infer(x, mask)
+        pred0, cam0, preds, cams = self.infer(x)
 
         hms = self.save_hm(cam0, cams[0], cams[-1])
         

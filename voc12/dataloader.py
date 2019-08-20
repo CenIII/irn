@@ -146,14 +146,13 @@ class VOC12ImageDataset(Dataset):
 
         if self.crop_size:
             if self.crop_method == "random":
-                img, mask = imutils.random_crop(img, self.crop_size, 0)
+                img = imutils.random_crop(img, self.crop_size, 0)
             else:
                 img = imutils.top_left_crop(img, self.crop_size, 0)
 
         if self.to_torch:
             img = imutils.HWC_to_CHW(img)
-            mask = imutils.HWC_to_CHW(mask)
-        return {'name': name, 'img': img, 'mask': mask}
+        return {'name': name, 'img': img}
 
 class VOC12ClassificationDataset(VOC12ImageDataset):
 
