@@ -126,7 +126,7 @@ def run(args):
 	param_groups = model.trainable_parameters()
 	optimizer = torchutils.PolyOptimizer([
 		{'params': param_groups[0], 'lr': args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
-		# {'params': param_groups[1], 'lr': 10*args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
+		{'params': param_groups[1], 'lr': 10*args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
 		{'params': param_groups[2], 'lr': 10*args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
 	], lr=args.cam_learning_rate, weight_decay=args.cam_weight_decay, max_step=max_step)
 
@@ -152,7 +152,7 @@ def run(args):
 				visualize(img, model.module, hms, label, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir)
 				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir)
 				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir, origin=True)
-			loss = torchutils.batch_multilabel_reweight_loss(preds[0], label, mean=True)# tmpflag=flag) #, mean=True)
+			loss = torchutils.batch_multilabel_reweight_loss(preds, label, mean=True)# tmpflag=flag) #, mean=True)
 			loss += torchutils.multilabel_reweight_loss(pred0, label, tmpflag=flag))#F.multilabel_soft_margin_loss(pred0, label)
 			avg_meter.add({'loss1': loss.item()})
 			with autograd.detect_anomaly():
