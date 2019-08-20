@@ -37,8 +37,8 @@ def validate(model, data_loader):
 			preds, pred0, hms = model(img)
 			# loss1 = torchutils.batch_multilabel_loss(preds, label, mean=True)
 			wts = model.module.get_gap_weights()
-			loss1 = torchutils.multilabel_reweight_loss(preds[0], label, wts)#, mean=True)
-			loss1 += F.multilabel_soft_margin_loss(pred0, label)
+			loss = torchutils.batch_multilabel_reweight_loss(preds, label, mean=True)# tmpflag=flag) #, mean=True)
+			loss += torchutils.multilabel_reweight_loss(pred0, label, tmpflag=flag)#F.multilabel_soft_margin_loss(pred0, label)
 
 			val_loss_meter.add({'loss1': loss1.item()})
 
@@ -158,7 +158,7 @@ def run(args):
 			with autograd.detect_anomaly():
 				optimizer.zero_grad()
 				loss.backward()
-				clip_grad_norm_(model.parameters(), 1.)
+				clip_grad_norm_(model.parameters(), 0.9)
 				optimizer.step()
 			flag = False
 			if (optimizer.global_step-1)%100 == 0:
@@ -174,7 +174,7 @@ def run(args):
 
 		else:
 			torch.save(model.module.state_dict(), args.cam_weights_name + '.pth')
-			# validate(model, val_data_loader)
+			validate(model, val_data_loader)
 			timer.reset_stage()
 
 	torch.save(model.module.state_dict(), args.cam_weights_name + '.pth')

@@ -142,7 +142,7 @@ affnMat = torch.tensor([[0,	0,	0,	1,	0,	1,	1,	0,	0,	0,	0,	0,	0,	1,	0,	0,	0,	0,	1
 def batch_multilabel_reweight_loss(preds, label, mean=False):
     loss = []
     for pred in preds:
-        loss.append(F.multilabel_reweight_loss(pred, label))
+        loss.append(multilabel_reweight_loss(pred, label))
     ret = sum(loss)
     if mean:
         ret = ret/len(loss)
@@ -159,7 +159,7 @@ def multilabel_reweight_loss(input, target, weight=None,reduction='mean',tmpflag
     # if gap_weights is not None:
     zzz = torch.matmul(target,affnMat)
     zzz[zzz>0] = 1.
-    wts = 1. - zzz
+    wts = (1. - zzz)+1e-5
 
     if tmpflag:
         import pdb;pdb.set_trace()
