@@ -86,7 +86,8 @@ def visualize_all_classes(hms, label, iterno, savepath, origin=False):
 	N,W,H,C = hms.shape
 	for i in range(0, C):
 		ax[int(i/5)][int(i%5)].imshow(hms[0][...,i].data.cpu().numpy())
-		ax[int(i/5)][int(i%5)].set_title(class_name[i],color='r' if label[0][i]>0 else 'black')
+		peak_val = hms[0][...,i].view(-1).max().data.cpu().numpy()
+		ax[int(i/5)][int(i%5)].set_title(class_name[i]+': '+str(np.round(peak_val,2)),color='r' if label[0][i]>0 else 'black')
 	fig.suptitle('iteration '+str(iterno))
 	
 	# plt.pause(0.02)
