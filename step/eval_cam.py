@@ -103,6 +103,35 @@ def get_undis_ft(feats, pred, label, keys):
 		var_ft_list.append(var_ft)
 	return mean_ft_list, var_ft_list
 
+def get_diff_ft(feats, pred, pred_rel, label, keys):
+	D,H,W = feats.shape
+	mean_ft_list = []
+	var_ft_list = []
+	feats_flat = np.reshape(feats,(D,-1))
+	for k in keys:
+		mask = (pred==k).astype(np.int)
+		mask = cv2.resize(mask,dsize=(W,H),interpolation=cv2.INTER_NEAREST)
+		mask_flat = np.reshape(mask,(-1))
+		mask_rel = (pred_rel==k).astype(np.int)
+		mask_rel = cv2.resize(mask_rel,dsize=(W,H),interpolation=cv2.INTER_NEAREST)
+		mask_rel_flat = np.reshape(mask_rel,(-1))
+
+		mask_l = (label==k).astype(np.int)
+		mask_l = cv2.resize(mask_l,dsize=(W,H),interpolation=cv2.INTER_NEAREST)
+		mask_l_flat = np.reshape(mask_l,(-1))
+		tmp = mask_l_flat - mask_flat
+		tmp[tmp<=0] = 0
+		tmp = tmp*mask_rel_flat
+		nz_indices = np.nonzero(tmp)[0] # FIXME: what if empty? 
+		if len(nz_indices)==0:
+			return None, None
+		nz_feats = feats_flat[:,nz_indices]
+		mean_ft = nz_feats.mean(axis=1)
+		mean_ft_list.append(mean_ft)
+		var_ft = nz_feats.var(axis=1)
+		var_ft_list.append(var_ft)
+	return mean_ft_list, var_ft_list
+
 def get_bg_ft(feats, label):
 	D,H,W = feats.shape
 	mean_ft_list = []
@@ -151,6 +180,14 @@ def run(args):
 		cams = np.pad(cams, ((1, 0), (0, 0), (0, 0)), mode='constant', constant_values=args.cam_eval_thres)
 		keys = np.pad(cam_dict['keys'] + 1, (1, 0), mode='constant')
 		cls_labels = np.argmax(cams, axis=0)
+
+		cam_dict_rel = np.load(os.path.join('exp/hier_shwkq_nosqrt01/cam', id + '.npy'), allow_pickle=True).item() #'./exp/original_cam/result/cam/'
+		cams_rel = cam_dict_rel['high_res']
+		cams_rel = np.pad(cams_rel, ((1, 0), (0, 0), (0, 0)), mode='constant', constant_values=args.cam_eval_thres)
+		# keys = np.pad(cam_dict_rel['keys'] + 1, (1, 0), mode='constant')
+		cls_labels_rel = np.argmax(cams_rel, axis=0)
+
+		
 		if args.cam_eval_use_crf:
 			img = np.asarray(imageio.imread(args.voc12_root+"JPEGImages/"+str(id)+'.jpg')) # load the original image 
 			pred = imutils.crf_inference_label(img, cls_labels, n_labels=keys.shape[0]) # pass through CRF
@@ -162,6 +199,7 @@ def run(args):
 		
 		mean_dis_ft, var_dis_ft = get_dis_ft(feats,cams,keys[1:])  # two lists
 		mean_undis_ft, var_undis_ft = get_undis_ft(feats,cls_labels,labels[i],keys[1:])  # two lists
+		mean_diff_ft, var_diff_ft = get_diff_ft(feats,cls_labels, cls_labels_rel, labels[i],keys[1:])
 		if not (mean_dis_ft is None or mean_undis_ft is None):
 			featDict['dis_ft'] += mean_dis_ft
 			featDict['dis_var'] += var_dis_ft
