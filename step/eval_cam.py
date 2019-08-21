@@ -161,7 +161,7 @@ def run(args):
 	labels = [dataset.get_example_by_keys(i, (1,))[0] for i in range(len(dataset))]
 	
 	preds = []
-	featDict={'dis_ft':[],'undis_ft':[],'bg_ft':[],'dis_var':[], 'undis_var':[],'bg_var':[],'class_id':[]}
+	featDict={'dis_ft':[],'undis_ft':[],'bg_ft':[],'dis_var':[], 'undis_var':[], 'diff_ft':[], 'diff_var':[], 'bg_var':[],'class_id':[]}
 	# for id in dataset.ids:
 	qdar = tqdm.tqdm(range(len(dataset.ids)), total=len(dataset.ids), ascii=True)
 	for i in qdar:
@@ -181,7 +181,7 @@ def run(args):
 		keys = np.pad(cam_dict['keys'] + 1, (1, 0), mode='constant')
 		cls_labels = np.argmax(cams, axis=0)
 
-		cam_dict_rel = np.load(os.path.join('exp/hier_shwkq_nosqrt01/cam', id + '.npy'), allow_pickle=True).item() #'./exp/original_cam/result/cam/'
+		cam_dict_rel = np.load(os.path.join('./exp/hier_shwkq_nosqrt01/result/cam', id + '.npy'), allow_pickle=True).item() #'./exp/original_cam/result/cam/'
 		cams_rel = cam_dict_rel['high_res']
 		cams_rel = np.pad(cams_rel, ((1, 0), (0, 0), (0, 0)), mode='constant', constant_values=args.cam_eval_thres)
 		# keys = np.pad(cam_dict_rel['keys'] + 1, (1, 0), mode='constant')
@@ -194,17 +194,19 @@ def run(args):
 			cls_labels = keys[pred]
 		else:
 			cls_labels = keys[cls_labels]
-		
+			cls_labels_rel = keys[cls_labels_rel]
 		# for this image, get 1. discri mean feat vec, 2. un-discri mean feat vec, variance, 3. back mean feat vec., variance
 		
 		mean_dis_ft, var_dis_ft = get_dis_ft(feats,cams,keys[1:])  # two lists
 		mean_undis_ft, var_undis_ft = get_undis_ft(feats,cls_labels,labels[i],keys[1:])  # two lists
 		mean_diff_ft, var_diff_ft = get_diff_ft(feats,cls_labels, cls_labels_rel, labels[i],keys[1:])
-		if not (mean_dis_ft is None or mean_undis_ft is None):
+		if not (mean_dis_ft is None or mean_undis_ft is None or mean_diff_ft is None):
 			featDict['dis_ft'] += mean_dis_ft
 			featDict['dis_var'] += var_dis_ft
 			featDict['undis_ft'] += mean_undis_ft
 			featDict['undis_var'] += var_undis_ft
+			featDict['diff_ft'] += mean_diff_ft
+			featDict['diff_var'] += var_diff_ft
 			featDict['class_id'] += list(keys[1:])
 		mean_ft, var_ft = get_bg_ft(feats,labels[i])  # two lists
 		if mean_ft is not None:

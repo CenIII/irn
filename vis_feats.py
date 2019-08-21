@@ -22,29 +22,9 @@ with open('featDict.pkl','rb') as f:
 	featDict = pickle.load(f)
 
 # plot discriminative region
-tsne = TSNE(n_components=2, verbose=1, perplexity=40, init='pca', n_iter=1000)
-x = np.array(featDict['dis_ft'])
-x = (x / np.linalg.norm(x,axis=1)[:,None])*60
-tsne_results = tsne.fit_transform(x) 
-
-plt.figure(figsize=(16,20))
-
-scatter_x = tsne_results[:,0]
-scatter_y = tsne_results[:,1]
-group = featDict['class_id']
-
-fig, ax = plt.subplots()
-for g in np.unique(group):
-	ix = np.where(group == g)
-	ax.scatter(scatter_x[ix], scatter_y[ix], c = cdict[g], label = class_name[g-1], s = 2)
-ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-plt.savefig('feats_vis_rel.png',bbox_inches='tight')
-plt.close()
-
-# # use params obtained above, check undiscrm region's distributions. 
-# tsne = TSNE(n_components=2, verbose=1, perplexity=40, init='pca', n_iter=500)
-# x = np.array(featDict['dis_ft']+featDict['undis_ft'])
-# x = (x / np.linalg.norm(x,axis=1)[:,None])*10
+# tsne = TSNE(n_components=2, verbose=1, perplexity=40, init='pca', n_iter=1000)
+# x = np.array(featDict['dis_ft'])
+# x = (x / np.linalg.norm(x,axis=1)[:,None])*60
 # tsne_results = tsne.fit_transform(x) 
 
 # plt.figure(figsize=(16,20))
@@ -54,37 +34,57 @@ plt.close()
 # group = featDict['class_id']
 
 # fig, ax = plt.subplots()
-# cnt=1
 # for g in np.unique(group):
-# 	# if cnt>3:
-# 	# 	break
 # 	ix = np.where(group == g)
-# 	ax.scatter(scatter_x[ix], scatter_y[ix], c = cdict[g], marker='*', label = class_name[g-1], s = 10)
-# 	cnt+=1
-# cnt=1
-# # for g in np.unique(group):
-# # 	# if cnt>3:
-# # 	# 	break
-# # 	ix = np.where(group == g)[0]+len(group)
-# # 	ax.scatter(scatter_x[ix], scatter_y[ix], s = 10, marker='s',edgecolor=cdict[g], linewidth=1, facecolor='none') #label = class_name[g-1],
-# # 	cnt+=1
+# 	ax.scatter(scatter_x[ix], scatter_y[ix], c = cdict[g], label = class_name[g-1], s = 2)
 # ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-# plt.savefig('feats_vis_undis_wo_rel.png',bbox_inches='tight')
+# plt.savefig('feats_vis_rel.png',bbox_inches='tight')
+# plt.close()
 
-# fig, ax = plt.subplots()
-# cnt=1
-# for g in np.unique(group):
-# 	# if cnt>3:
-# 	# 	break
-# 	ix = np.where(group == g)
-# 	ax.scatter(scatter_x[ix], scatter_y[ix], c = cdict[g], marker='*', label = class_name[g-1], s = 10)
-# 	cnt+=1
-# cnt=1
+# use params obtained above, check undiscrm region's distributions. 
+tsne = TSNE(n_components=2, verbose=1, perplexity=40, init='pca', n_iter=1000)
+x = np.array(featDict['dis_ft']+featDict['undis_ft'])
+x = (x / np.linalg.norm(x,axis=1)[:,None])*10
+tsne_results = tsne.fit_transform(x) 
+
+plt.figure(figsize=(16,20))
+
+scatter_x = tsne_results[:,0]
+scatter_y = tsne_results[:,1]
+group = featDict['class_id']
+
+fig, ax = plt.subplots()
+cnt=1
+for g in np.unique(group):
+	# if cnt>3:
+	# 	break
+	ix = np.where(group == g)
+	ax.scatter(scatter_x[ix], scatter_y[ix], c = cdict[g], marker='*', label = class_name[g-1], s = 10)
+	cnt+=1
+cnt=1
 # for g in np.unique(group):
 # 	# if cnt>3:
 # 	# 	break
 # 	ix = np.where(group == g)[0]+len(group)
 # 	ax.scatter(scatter_x[ix], scatter_y[ix], s = 10, marker='s',edgecolor=cdict[g], linewidth=1, facecolor='none') #label = class_name[g-1],
 # 	cnt+=1
-# ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-# plt.savefig('feats_vis_undis_rel.png',bbox_inches='tight')
+ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+plt.savefig('feats_vis_undis_wo_rel.png',bbox_inches='tight')
+
+fig, ax = plt.subplots()
+cnt=1
+for g in np.unique(group):
+	# if cnt>3:
+	# 	break
+	ix = np.where(group == g)
+	ax.scatter(scatter_x[ix], scatter_y[ix], c = cdict[g], marker='*', label = class_name[g-1], s = 10)
+	cnt+=1
+cnt=1
+for g in np.unique(group):
+	# if cnt>3:
+	# 	break
+	ix = np.where(group == g)[0]+len(group)
+	ax.scatter(scatter_x[ix], scatter_y[ix], s = 10, marker='s',edgecolor=cdict[g], linewidth=1, facecolor='none') #label = class_name[g-1],
+	cnt+=1
+ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+plt.savefig('feats_vis_undis_rel.png',bbox_inches='tight')
