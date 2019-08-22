@@ -118,10 +118,10 @@ def top_left_crop(img, cropsize, default_value):
         container = np.ones((cropsize, cropsize), img.dtype)*default_value
     else:
         container = np.ones((cropsize, cropsize, img.shape[2]), img.dtype)*default_value
-
+        mask = np.zeros((cropsize, cropsize, img.shape[2]), img.dtype)
     container[:ch, :cw] = img[:ch, :cw]
-
-    return container
+    mask[:ch, :cw] = 1.
+    return container, mask
 
 def center_crop(img, cropsize, default_value=0):
 

@@ -85,20 +85,24 @@ class Net(nn.Module):
         # pred1, cam1 = self.relation(cam0, K_d, Q_d)
         # cam1 = self.upscale_cam(cam1)[..., :edge2.size(2), :edge2.size(3)]
         # pred2, cam2 = self.relation(cam1, K, Q)
-
-        return pred0, cam0, [pred1], [cam1]
+        ftnorm = torch.norm(feats_loc,dim=1).detach().data
+        return pred0, cam0, [pred1], [cam1], ftnorm 
 
     def forward(self, x, mask):
 
-        pred0, cam0, preds, cams = self.infer(x, mask)
+        pred0, cam0, preds, cams, ftnorm = self.infer(x, mask)
 
-        hms = self.save_hm(cam0, cams[0], cams[-1])
+        hms = self.save_hm(cam0, cams[0])
+        hms.append(ftnorm)
         
         return preds, pred0, hms
 
     def getHeatmaps(self, hms, classid):
         hm = []
         for heatmap in hms:
+            if heatmap.dim()<4:
+                hm.append(heatmap)
+                continue
             zzz = classid[:, None, None, None].repeat(1, heatmap.shape[1], heatmap.shape[2], 1)
             hm.append(torch.gather(heatmap, 3, zzz).squeeze())
         return hm

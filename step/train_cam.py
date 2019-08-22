@@ -81,7 +81,7 @@ def visualize_all_classes(hms, label, iterno, savepath, origin=False):
 				'tvmonitor']
 
 	fig, ax = plt.subplots(nrows=4, ncols=5)
-	hms = hms[0] if origin else hms[-1]
+	hms = hms[0] if origin else hms[-2]
 	N,W,H,C = hms.shape
 	for i in range(0, C):
 		ax[int(i/5)][int(i%5)].imshow(hms[0][...,i].data.cpu().numpy())
