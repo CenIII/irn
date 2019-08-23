@@ -69,7 +69,7 @@ class Net(nn.Module):
         wt = self.bgap.lin.weight.detach().data.squeeze()
         # import pdb;pdb.set_trace()
         logits = torch.matmul(wt,wt.transpose(0,1))
-        bd_weight_dict = logits/(torch.sum(logits,dim=1,keepdim=True)+1e-5)# F.softmax(self.alpha*logits, dim=1)
+        bd_weight_dict = F.softmax(-self.alpha*logits, dim=1)#logits/(torch.sum(logits,dim=1,keepdim=True)+1e-5)# 
         self.bd_weight_dict = bd_weight_dict
         return bd_weight_dict
 
