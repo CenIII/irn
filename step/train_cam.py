@@ -34,7 +34,7 @@ def validate(model, data_loader):
 
 			# x = model(img)
 			# loss1 = torchutils.batch_multilabel_loss(x, label)
-			preds, pred0, hms, clsbds = model(img, mask, label)
+			preds, pred0, hms = model(img, mask, label)
 			# loss1 = torchutils.batch_multilabel_loss(preds, label, mean=True)
 			loss1 = 0.
 			# loss1 = torchutils.multilabel_soft_pull_loss(preds[0], label)#, mean=True)
@@ -99,7 +99,7 @@ def visualize_class_boudaries(clsbds, label, iterno, savepath):
 
 def run(args):
 	model = getattr(importlib.import_module(args.cam_network), 'Net')()
-	model.load_state_dict(torch.load('exp/normft_crssent_ftnormap01/sess/res50_cam.pth' + '.pth'), strict=True) #args.cam_weights_name
+	model.load_state_dict(torch.load('exp/normft_crssent_ftnormap02/sess/res50_cam.pth' + '.pth'), strict=True) #args.cam_weights_name
 	
 	seed = 42
 	torch.manual_seed(seed)
@@ -134,7 +134,7 @@ def run(args):
 
 	model = torch.nn.DataParallel(model).cuda()
 	model.train()
-	model.make_bd_weight_dict()
+	# model.module.make_bd_weight_dict()
 
 	avg_meter = pyutils.AverageMeter()
 
@@ -152,9 +152,9 @@ def run(args):
 			img = pack['img'].cuda()
 			mask = pack['mask'].cuda()
 			label = pack['label'].cuda(non_blocking=True)
-			preds, pred0, hms, clsbds = model(img, mask, label)
+			preds, pred0, hms = model(img, mask, label)
 			if global_step%10 == 0 and args.cam_visualize_train:
-				visualize(img, model, hms, label, cb, global_step, img_denorm, args.vis_out_dir)#.module
+				visualize(img, model.module, hms, label, cb, global_step, img_denorm, args.vis_out_dir)#.module
 				visualize_all_classes(hms, label, global_step, args.vis_out_dir)
 				visualize_all_classes(hms, label, global_step, args.vis_out_dir, origin=1, keyword='bgap')
 				visualize_all_classes(hms, label, global_step, args.vis_out_dir, origin=2, keyword='edge')
@@ -162,7 +162,7 @@ def run(args):
 			loss = 0.
 			# loss = torchutils.multilabel_soft_pull_loss(preds[0], label) #, mean=True)
 			# loss += F.multilabel_soft_margin_loss(pred0, label)
-			# avg_meter.add({'loss1': loss.item()})
+			avg_meter.add({'loss1': loss}) #.item()
 			# with autograd.detect_anomaly():
 			# 	optimizer.zero_grad()
 			# 	loss.backward()

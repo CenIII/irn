@@ -63,6 +63,7 @@ class Net(nn.Module):
         self.convs = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge4]) #, self.kq
         self.leaf_gaps = nn.ModuleList([self.gap, self.bgap])
         self.alpha = 2.
+        self.bd_weight_dict = None
 
     def make_bd_weight_dict(self):
         wt = self.bgap.lin.weight.detach().data.squeeze()
@@ -104,6 +105,8 @@ class Net(nn.Module):
         edges = kornia.sobel(normed_cam) #[2, 20, 32, 32]
         # batch get boundary map for all classes using bd_weight_map
         tmp=edges.view(N,C,-1).permute(0,2,1)
+        if self.bd_weight_dict is None:
+            self.make_bd_weight_dict()
         edges_comb = torch.matmul(tmp,self.bd_weight_dict.transpose(0,1)).permute(0,2,1).view(N,C,W,H)
         # return cam. 
         return edges_comb
@@ -111,7 +114,6 @@ class Net(nn.Module):
     def forward(self, x, mask, label):
 
         pred0, cam0, preds, cams = self.infer(x, mask)
-        import pdb;pdb.set_trace()
         edge_map = self.make_class_boundary(cams[-1],label)
         hms = self.save_hm(cam0, cams[0], edge_map)
         
