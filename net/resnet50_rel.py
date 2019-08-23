@@ -85,17 +85,23 @@ class Net(nn.Module):
         # pred1, cam1 = self.relation(cam0, K_d, Q_d)
         # cam1 = self.upscale_cam(cam1)[..., :edge2.size(2), :edge2.size(3)]
         # pred2, cam2 = self.relation(cam1, K, Q)
-        ftnorm = torch.norm(feats_loc,dim=1).detach().data
-        return pred0, cam0, [pred1], [cam1], ftnorm 
+        # ftnorm = torch.norm(feats_loc,dim=1).detach().data
+        return pred0, cam0, [pred1], [cam1]#, ftnorm 
 
-    def forward(self, x, mask):
+    def make_class_boundary(normed_cam, label):
+        # TODO: implement this. 
+        import pdb;pdb.set_trace()
+        pass
+        return clsbd_list
 
-        pred0, cam0, preds, cams, ftnorm = self.infer(x, mask)
+    def forward(self, x, mask, label):
 
+        pred0, cam0, preds, cams = self.infer(x, mask)
+        clsbd_list = self.make_class_boundary(cams[-1],label)
         hms = self.save_hm(cam0, cams[0])
-        hms.append(ftnorm)
+        hms.append(clsbd_list[0])
         
-        return preds, pred0, hms
+        return preds, pred0, hms, clsbd_list
 
     def getHeatmaps(self, hms, classid):
         hm = []

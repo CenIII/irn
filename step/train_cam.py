@@ -34,12 +34,13 @@ def validate(model, data_loader):
 
 			# x = model(img)
 			# loss1 = torchutils.batch_multilabel_loss(x, label)
-			preds, pred0, hms = model(img, mask)
+			preds, pred0, hms, clsbds = model(img, mask, label)
 			# loss1 = torchutils.batch_multilabel_loss(preds, label, mean=True)
-			loss1 = torchutils.multilabel_soft_pull_loss(preds[0], label)#, mean=True)
-			loss1 += F.multilabel_soft_margin_loss(pred0, label)
+			loss1 = 0.
+			# loss1 = torchutils.multilabel_soft_pull_loss(preds[0], label)#, mean=True)
+			# loss1 += F.multilabel_soft_margin_loss(pred0, label)
 
-			val_loss_meter.add({'loss1': loss1.item()})
+			val_loss_meter.add({'loss1': loss1}) #.item()
 
 	model.train()
 
@@ -73,12 +74,7 @@ def visualize(x, net, hms, label, cb, iterno, img_denorm, savepath):
 
 def visualize_all_classes(hms, label, iterno, savepath, origin=False):
 	# plt.figure(2)
-	class_name = ['aeroplane', 'bicycle', 'bird', 'boat',
-				'bottle', 'bus', 'car', 'cat', 'chair',
-				'cow', 'diningtable', 'dog', 'horse',
-				'motorbike', 'person', 'pottedplant',
-				'sheep', 'sofa', 'train',
-				'tvmonitor']
+	class_name = ['aeroplane', 'bicycle', 'bird', 'boat','bottle', 'bus', 'car', 'cat', 'chair','cow', 'diningtable', 'dog', 'horse','motorbike', 'person', 'pottedplant','sheep', 'sofa', 'train','tvmonitor']
 
 	fig, ax = plt.subplots(nrows=4, ncols=5)
 	hms = hms[0] if origin else hms[-2]
@@ -95,9 +91,18 @@ def visualize_all_classes(hms, label, iterno, savepath, origin=False):
 	plt.savefig(os.path.join(savepath, savename))
 	plt.close()
 
+def visualize_class_boudaries(clsbds, label, iterno, savepath):
+	class_name = ['aeroplane', 'bicycle', 'bird', 'boat','bottle', 'bus', 'car', 'cat', 'chair','cow', 'diningtable', 'dog', 'horse','motorbike', 'person', 'pottedplant','sheep', 'sofa', 'train','tvmonitor']
+	# TODO: implement this
+
+	import pdb;pdb.set_trace()
+	pass
+	return
+
 def run(args):
 	model = getattr(importlib.import_module(args.cam_network), 'Net')()
-
+	model.load_state_dict(torch.load(args.cam_weights_name + '.pth'), strict=True)
+	import pdb;pdb.set_trace()
 	seed = 42
 	torch.manual_seed(seed)
 	torch.cuda.manual_seed(seed)
@@ -129,7 +134,7 @@ def run(args):
 		{'params': param_groups[2], 'lr': 10*args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
 	], lr=args.cam_learning_rate, weight_decay=args.cam_weight_decay, max_step=max_step)
 
-	model = torch.nn.DataParallel(model).cuda()
+	model = model.cuda()# torch.nn.DataParallel(model).cuda()
 	model.train()
 
 	avg_meter = pyutils.AverageMeter()
@@ -138,6 +143,7 @@ def run(args):
 
 	cb = [None, None, None, None]
 	img_denorm = torchutils.ImageDenorm()
+	global_step = 0.
 	for ep in range(args.cam_num_epoches):
 
 		print('Epoch %d/%d' % (ep+1, args.cam_num_epoches))
@@ -147,35 +153,37 @@ def run(args):
 			img = pack['img'].cuda()
 			mask = pack['mask'].cuda()
 			label = pack['label'].cuda(non_blocking=True)
-			preds, pred0, hms = model(img, mask)
-			if (optimizer.global_step-1)%10 == 0 and args.cam_visualize_train:
-				visualize(img, model.module, hms, label, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir)
-				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir)
-				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir, origin=True)
-			loss = torchutils.multilabel_soft_pull_loss(preds[0], label) #, mean=True)
-			loss += F.multilabel_soft_margin_loss(pred0, label)
-			avg_meter.add({'loss1': loss.item()})
-			with autograd.detect_anomaly():
-				optimizer.zero_grad()
-				loss.backward()
-				# import pdb;pdb.set_trace()
-				# print(torch.max(model.module.gap.lin.weight.grad))
-				clip_grad_norm_(model.parameters(), 1.)
-				optimizer.step()
+			preds, pred0, hms, clsbds = model(img, mask, label)
+			if global_step%10 == 0 and args.cam_visualize_train:
+				visualize(img, model, hms, label, cb, global_step, img_denorm, args.vis_out_dir)#.module
+				visualize_all_classes(hms, label, global_step, args.vis_out_dir)
+				visualize_all_classes(hms, label, global_step, args.vis_out_dir, origin=True)
+				visualize_class_boudaries(clsbds, global_step, args.vis_out_dir)
+			loss = 0.
+			# loss = torchutils.multilabel_soft_pull_loss(preds[0], label) #, mean=True)
+			# loss += F.multilabel_soft_margin_loss(pred0, label)
+			# avg_meter.add({'loss1': loss.item()})
+			# with autograd.detect_anomaly():
+			# 	optimizer.zero_grad()
+			# 	loss.backward()
+			# 	# import pdb;pdb.set_trace()
+			# 	# print(torch.max(model.module.gap.lin.weight.grad))
+			# 	clip_grad_norm_(model.parameters(), 1.)
+			# 	optimizer.step()
 
-			if (optimizer.global_step-1)%100 == 0:
-				timer.update_progress(optimizer.global_step / max_step)
+			if global_step%100 == 0:
+				timer.update_progress((global_step+1) / max_step)
 
-				print('step:%5d/%5d' % (optimizer.global_step - 1, max_step),
+				print('step:%5d/%5d' % (global_step, max_step),
 					  'loss:%.4f' % (avg_meter.pop('loss1')),
 					  'imps:%.1f' % ((step + 1) * args.cam_batch_size / timer.get_stage_elapsed()),
 					  'lr: %.4f' % (optimizer.param_groups[0]['lr']),
 					  'etc:%s' % (timer.str_estimated_complete()), flush=True)
-
+			global_step += 1
 		else:
-			torch.save(model.module.state_dict(), args.cam_weights_name + '.pth')
+			# torch.save(model.module.state_dict(), args.cam_weights_name + '.pth')
 			validate(model, val_data_loader)
 			timer.reset_stage()
 
-	torch.save(model.module.state_dict(), args.cam_weights_name + '.pth')
+	# torch.save(model.module.state_dict(), args.cam_weights_name + '.pth')
 	torch.cuda.empty_cache()
