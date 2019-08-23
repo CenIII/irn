@@ -5,6 +5,7 @@ from misc import torchutils
 from net import resnet50
 
 from .modules import Gap, KQ, Relation
+import kornia
 
 KQ_DIM = 8
 
@@ -61,6 +62,15 @@ class Net(nn.Module):
         self.backbone = nn.ModuleList([self.stage4, self.stage5]) #self.stage1, self.stage2, self.stage3, 
         self.convs = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge4]) #, self.kq
         self.leaf_gaps = nn.ModuleList([self.gap, self.bgap])
+        self.alpha = 2.
+
+    def make_bd_weight_dict(self):
+        wt = self.bgap.lin.weight.detach().data.squeeze()
+        # import pdb;pdb.set_trace()
+        logits = torch.matmul(wt,wt.transpose(0,1))
+        bd_weight_dict = F.softmax(-self.alpha*logits, dim=1)
+        self.bd_weight_dict = bd_weight_dict
+        return bd_weight_dict
 
     def infer(self, x, mask, train=True):
         x1 = self.stage1(x).detach()
@@ -88,20 +98,24 @@ class Net(nn.Module):
         # ftnorm = torch.norm(feats_loc,dim=1).detach().data
         return pred0, cam0, [pred1], [cam1]#, ftnorm 
 
-    def make_class_boundary(normed_cam, label):
-        # TODO: implement this. 
-        import pdb;pdb.set_trace()
-        pass
-        return clsbd_list
+    def make_class_boundary(self, normed_cam, label): #[2, 20, 32, 32]
+        N, C, W, H = normed_cam.shape
+        # obtain boundary map for all normed_cam
+        edges = kornia.sobel(normed_cam) #[2, 20, 32, 32]
+        # batch get boundary map for all classes using bd_weight_map
+        tmp=edges.view(N,C,-1).permute(0,2,1)
+        edges_comb = torch.matmul(tmp,self.bd_weight_dict.transpose(0,1)).permute(0,2,1).view(N,C,W,H)
+        # return cam. 
+        return edges_comb
 
     def forward(self, x, mask, label):
 
         pred0, cam0, preds, cams = self.infer(x, mask)
-        clsbd_list = self.make_class_boundary(cams[-1],label)
-        hms = self.save_hm(cam0, cams[0])
-        hms.append(clsbd_list[0])
+        import pdb;pdb.set_trace()
+        edge_map = self.make_class_boundary(cams[-1],label)
+        hms = self.save_hm(cam0, cams[0], edge_map)
         
-        return preds, pred0, hms, clsbd_list
+        return preds, pred0, hms
 
     def getHeatmaps(self, hms, classid):
         hm = []

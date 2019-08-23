@@ -72,12 +72,12 @@ def visualize(x, net, hms, label, cb, iterno, img_denorm, savepath):
 	plt.close()
 	return cb
 
-def visualize_all_classes(hms, label, iterno, savepath, origin=False):
+def visualize_all_classes(hms, label, iterno, savepath, origin=0, keyword='orig'):
 	# plt.figure(2)
 	class_name = ['aeroplane', 'bicycle', 'bird', 'boat','bottle', 'bus', 'car', 'cat', 'chair','cow', 'diningtable', 'dog', 'horse','motorbike', 'person', 'pottedplant','sheep', 'sofa', 'train','tvmonitor']
 
 	fig, ax = plt.subplots(nrows=4, ncols=5)
-	hms = hms[0] if origin else hms[-2]
+	hms = hms[origin] # if origin else hms[-2]
 	N,W,H,C = hms.shape
 	for i in range(0, C):
 		ax[int(i/5)][int(i%5)].imshow(hms[0][...,i].data.cpu().numpy())
@@ -85,9 +85,7 @@ def visualize_all_classes(hms, label, iterno, savepath, origin=False):
 	fig.suptitle('iteration '+str(iterno))
 	
 	# plt.pause(0.02)
-	savename = 'visual_train_'+str(iterno)+'_cams.png'
-	if origin:
-		savename = 'visual_train_'+str(iterno)+'_orig_cams.png'
+	savename = 'visual_train_'+str(iterno)+'_'+keyword+'_cams.png'
 	plt.savefig(os.path.join(savepath, savename))
 	plt.close()
 
@@ -101,8 +99,8 @@ def visualize_class_boudaries(clsbds, label, iterno, savepath):
 
 def run(args):
 	model = getattr(importlib.import_module(args.cam_network), 'Net')()
-	model.load_state_dict(torch.load(args.cam_weights_name + '.pth'), strict=True)
-	import pdb;pdb.set_trace()
+	model.load_state_dict(torch.load('exp/normft_crssent_ftnormap01/sess/res50_cam.pth' + '.pth'), strict=True) #args.cam_weights_name
+	
 	seed = 42
 	torch.manual_seed(seed)
 	torch.cuda.manual_seed(seed)
@@ -134,8 +132,9 @@ def run(args):
 		{'params': param_groups[2], 'lr': 10*args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
 	], lr=args.cam_learning_rate, weight_decay=args.cam_weight_decay, max_step=max_step)
 
-	model = model.cuda()# torch.nn.DataParallel(model).cuda()
+	model = torch.nn.DataParallel(model).cuda()
 	model.train()
+	model.make_bd_weight_dict()
 
 	avg_meter = pyutils.AverageMeter()
 
@@ -157,8 +156,9 @@ def run(args):
 			if global_step%10 == 0 and args.cam_visualize_train:
 				visualize(img, model, hms, label, cb, global_step, img_denorm, args.vis_out_dir)#.module
 				visualize_all_classes(hms, label, global_step, args.vis_out_dir)
-				visualize_all_classes(hms, label, global_step, args.vis_out_dir, origin=True)
-				visualize_class_boudaries(clsbds, global_step, args.vis_out_dir)
+				visualize_all_classes(hms, label, global_step, args.vis_out_dir, origin=1, keyword='bgap')
+				visualize_all_classes(hms, label, global_step, args.vis_out_dir, origin=2, keyword='edge')
+				
 			loss = 0.
 			# loss = torchutils.multilabel_soft_pull_loss(preds[0], label) #, mean=True)
 			# loss += F.multilabel_soft_margin_loss(pred0, label)
