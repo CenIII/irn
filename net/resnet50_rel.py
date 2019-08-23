@@ -69,7 +69,7 @@ class Net(nn.Module):
         wt = self.bgap.lin.weight.detach().data.squeeze()
         # import pdb;pdb.set_trace()
         logits = torch.matmul(wt,wt.transpose(0,1))
-        bd_weight_dict = F.softmax(-self.alpha*logits, dim=1)
+        bd_weight_dict = logits/(torch.sum(logits,dim=1,keepdim=True)+1e-5)# F.softmax(self.alpha*logits, dim=1)
         self.bd_weight_dict = bd_weight_dict
         return bd_weight_dict
 
@@ -102,9 +102,9 @@ class Net(nn.Module):
     def make_class_boundary(self, normed_cam, label): #[2, 20, 32, 32]
         N, C, W, H = normed_cam.shape
         # obtain boundary map for all normed_cam
-        edges = kornia.sobel(normed_cam) #[2, 20, 32, 32]
+        # edges = kornia.sobel(normed_cam) #[2, 20, 32, 32]
         # batch get boundary map for all classes using bd_weight_map
-        tmp=edges.view(N,C,-1).permute(0,2,1)
+        tmp=normed_cam.view(N,C,-1).permute(0,2,1)
         if self.bd_weight_dict is None:
             self.make_bd_weight_dict()
         edges_comb = torch.matmul(tmp,self.bd_weight_dict.transpose(0,1)).permute(0,2,1).view(N,C,W,H)
