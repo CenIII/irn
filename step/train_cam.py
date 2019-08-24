@@ -37,7 +37,7 @@ def validate(model, data_loader):
 			preds, pred0, hms = model(img, mask)
 			# loss1 = torchutils.batch_multilabel_loss(preds, label, mean=True)
 			loss1 = torchutils.multilabel_soft_pull_loss(preds[0], label)#, mean=True)
-			loss1 += F.multilabel_soft_margin_loss(pred0, label)
+			# loss1 += F.multilabel_soft_margin_loss(pred0, label)
 
 			val_loss_meter.add({'loss1': loss1.item()})
 
@@ -153,7 +153,7 @@ def run(args):
 				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir)
 				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir, origin=True)
 			loss = torchutils.multilabel_soft_pull_loss(preds[0], label) #, mean=True)
-			loss += F.multilabel_soft_margin_loss(pred0, label)
+			# loss += F.multilabel_soft_margin_loss(pred0, label)
 			avg_meter.add({'loss1': loss.item()})
 			with autograd.detect_anomaly():
 				optimizer.zero_grad()

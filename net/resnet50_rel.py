@@ -78,7 +78,7 @@ class Net(nn.Module):
         # K, Q = self.kq(feats_rel)
         pred0, cam0 = self.gap(feats_loc)
         # self.bgap.lin.weight = torch.nn.Parameter(10*self.bgap.lin.weight / torch.norm(self.bgap.lin.weight, dim=1, keepdim=True))
-        pred1, cam1 = self.bgap(F.normalize(feats_loc.detach(),dim=1)*10,mask=mask)
+        pred1, cam1 = self.bgap(F.normalize(feats_loc,dim=1)*10,mask=mask)
         # if train:
         #     K_d, Q_d = F.max_pool2d(K,2), F.max_pool2d(Q,2)
         # else:
