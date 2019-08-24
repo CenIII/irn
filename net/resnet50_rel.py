@@ -76,7 +76,7 @@ class Net(nn.Module):
 
         edge1 = self.fc_edge1(F.normalize(x1,dim=1))
         edge2 = self.fc_edge2(F.normalize(x2,dim=1))
-        edge3 = self.fc_edge2(F.normalize(x3,dim=1))[..., :edge2.size(2), :edge2.size(3)]
+        edge3 = self.fc_edge3(F.normalize(x3,dim=1))[..., :edge2.size(2), :edge2.size(3)]
         edge4 = self.fc_edge4(F.normalize(x4,dim=1))[..., :edge2.size(2), :edge2.size(3)]
         feats_rel = torch.cat([edge1, edge2, edge3, edge4], dim=1) #edge1, edge2, 
 
