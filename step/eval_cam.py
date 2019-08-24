@@ -121,7 +121,7 @@ def get_diff_ft(feats, pred, pred_rel, label, keys):
 		mask_l_flat = np.reshape(mask_l,(-1))
 		tmp = mask_l_flat - mask_flat
 		tmp[tmp<=0] = 0
-		tmp = tmp*mask_rel_flat
+		tmp = (1-tmp)*mask_rel_flat
 		nz_indices = np.nonzero(tmp)[0] # FIXME: what if empty? 
 		if len(nz_indices)==0:
 			return None, None
