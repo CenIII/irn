@@ -99,7 +99,7 @@ def visualize_all_classes(hms, label, iterno, savepath, origin=False):
 
 def run(args):
 	model = getattr(importlib.import_module(args.cam_network), 'Net')()
-	wts = torch.load('wts.pt') # load from file.
+	wts = torch.load('wts.pt').cuda() # load from file.
 	seed = 42
 	torch.manual_seed(seed)
 	torch.cuda.manual_seed(seed)
