@@ -125,7 +125,7 @@ def run(args):
 	param_groups = model.trainable_parameters()
 	optimizer = torchutils.PolyOptimizer([
 		{'params': param_groups[0], 'lr': args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
-		# {'params': param_groups[1], 'lr': 10*args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
+		{'params': param_groups[1], 'lr': 2*args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
 		{'params': param_groups[2], 'lr': 10*args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
 	], lr=args.cam_learning_rate, weight_decay=args.cam_weight_decay, max_step=max_step)
 
@@ -162,7 +162,8 @@ def run(args):
 				# print(torch.max(model.module.gap.lin.weight.grad))
 				clip_grad_norm_(model.parameters(), 1.)
 				optimizer.step()
-
+				with torch.no_grad():
+					model.module.bgap.lin.weight.div_(torch.norm(model.module.bgap.lin.weight, dim=1, keepdim=True))
 			if (optimizer.global_step-1)%100 == 0:
 				timer.update_progress(optimizer.global_step / max_step)
 

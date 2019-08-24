@@ -59,8 +59,8 @@ class Net(nn.Module):
         #                         rel_pattern=[(3,2),(5,1),(5,3),(5,5)]) 
         self.bgap = Gap(2048, self.n_class)
         self.backbone = nn.ModuleList([self.stage4, self.stage5]) #self.stage1, self.stage2, self.stage3, 
-        self.convs = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge4]) #, self.kq
-        self.leaf_gaps = nn.ModuleList([self.gap, self.bgap])
+        self.convs = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge4, self.bgap]) #, self.kq
+        self.leaf_gaps = nn.ModuleList([self.gap])
 
     def infer(self, x, mask, train=True):
         x1 = self.stage1(x).detach()
@@ -77,6 +77,7 @@ class Net(nn.Module):
 
         # K, Q = self.kq(feats_rel)
         pred0, cam0 = self.gap(feats_loc)
+        # self.bgap.lin.weight = torch.nn.Parameter(10*self.bgap.lin.weight / torch.norm(self.bgap.lin.weight, dim=1, keepdim=True))
         pred1, cam1 = self.bgap(F.normalize(feats_loc.detach(),dim=1)*10,mask=mask)
         # if train:
         #     K_d, Q_d = F.max_pool2d(K,2), F.max_pool2d(Q,2)
