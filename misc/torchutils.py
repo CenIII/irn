@@ -146,7 +146,7 @@ def multilabel_reweight_loss(input, target, gap_weights=None,weight=None,reducti
     """
     # if size_average is not None or reduce is not None:
     #     reduction = _Reduction.legacy_get_string(size_average, reduce)
-    
+    wts = torch.ones_like(target).type(device.FloatTensor)
     if gap_weights is not None:
         # import pdb;pdb.set_trace()
         # zzz = gap_weights[None,:]*target[...,None]

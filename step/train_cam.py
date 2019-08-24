@@ -36,8 +36,8 @@ def validate(model, data_loader):
 			# loss1 = torchutils.batch_multilabel_loss(x, label)
 			preds, pred0, hms = model(img)
 			# loss1 = torchutils.batch_multilabel_loss(preds, label, mean=True)
-			wts = model.module.get_gap_weights()
-			loss1 = torchutils.multilabel_reweight_loss(preds[0], label, wts) #, mean=True)
+			# wts = model.module.get_gap_weights()
+			loss1 = torchutils.multilabel_reweight_loss(preds[0], label) #, mean=True)
 			loss1 += F.multilabel_soft_margin_loss(pred0, label)
 
 			val_loss_meter.add({'loss1': loss1.item()})
@@ -99,7 +99,7 @@ def visualize_all_classes(hms, label, iterno, savepath, origin=False):
 
 def run(args):
 	model = getattr(importlib.import_module(args.cam_network), 'Net')()
-
+	wts = # load from file.
 	seed = 42
 	torch.manual_seed(seed)
 	torch.cuda.manual_seed(seed)
@@ -153,7 +153,7 @@ def run(args):
 				visualize(img, model.module, hms, label, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir)
 				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir)
 				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir, origin=True)
-			wts = model.module.get_gap_weights()
+			# wts = model.module.get_gap_weights()
 			loss = torchutils.multilabel_reweight_loss(preds[0], label, wts, tmpflag=flag) #, mean=True)
 			loss += F.multilabel_soft_margin_loss(pred0, label)
 			avg_meter.add({'loss1': loss.item()})
