@@ -36,9 +36,9 @@ def validate(model, data_loader):
 			# loss1 = torchutils.batch_multilabel_loss(x, label)
 			preds, pred0, hms = model(img)
 			# loss1 = torchutils.batch_multilabel_loss(preds, label, mean=True)
-			wts = model.module.get_gap_weights()
-			loss = torchutils.batch_multilabel_reweight_loss(preds, label, mean=True)# tmpflag=flag) #, mean=True)
-			loss += torchutils.multilabel_reweight_loss(pred0, label, tmpflag=flag)#F.multilabel_soft_margin_loss(pred0, label)
+			# wts = model.module.get_gap_weights()
+			loss1 = torchutils.batch_multilabel_reweight_loss(preds, label, mean=True)# tmpflag=flag) #, mean=True)
+			loss1 += torchutils.multilabel_reweight_loss(pred0, label)#F.multilabel_soft_margin_loss(pred0, label)
 
 			val_loss_meter.add({'loss1': loss1.item()})
 
@@ -98,8 +98,8 @@ def visualize_all_classes(hms, label, iterno, savepath, origin=False):
 
 def run(args):
 	model = getattr(importlib.import_module(args.cam_network), 'Net')()
-
-	seed = 42
+	model.load_state_dict(torch.load(args.cam_weights_name + '.pth'), strict=True)
+	seed = 41
 	torch.manual_seed(seed)
 	torch.cuda.manual_seed(seed)
 	torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU.
@@ -147,19 +147,28 @@ def run(args):
 
 			img = pack['img'].cuda()
 			label = pack['label'].cuda(non_blocking=True)
-			preds, pred0, hms = model(img)
-			if (optimizer.global_step-1)%10 == 0 and args.cam_visualize_train:
-				visualize(img, model.module, hms, label, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir)
-				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir)
-				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir, origin=True)
-			loss = torchutils.batch_multilabel_reweight_loss(preds, label, mean=True)# tmpflag=flag) #, mean=True)
-			loss += torchutils.multilabel_reweight_loss(pred0, label, tmpflag=flag)#F.multilabel_soft_margin_loss(pred0, label)
-			avg_meter.add({'loss1': loss.item()})
 			with autograd.detect_anomaly():
+				preds, pred0, hms = model(img)
+				if (optimizer.global_step-1)%10 == 0 and args.cam_visualize_train:
+					visualize(img, model.module, hms, label, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir)
+					visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir)
+					visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir, origin=True)
+				# if preds[-1].max()>90.:
+				# 	continue
+				loss = torchutils.batch_multilabel_reweight_loss(preds, label, mean=True)# tmpflag=flag) #, mean=True)
+				loss += torchutils.multilabel_reweight_loss(pred0, label, tmpflag=flag)#F.multilabel_soft_margin_loss(pred0, label)
+				avg_meter.add({'loss1': loss.item()})
+			
 				optimizer.zero_grad()
-				loss.backward()
-				clip_grad_norm_(model.parameters(), 0.9)
-				optimizer.step()
+				error = False
+				try:
+					loss.backward()
+					clip_grad_norm_(model.parameters(), 1.)
+				except:
+					print("capture an error.")
+					error = True
+				if not error:
+					optimizer.step()
 			flag = False
 			if (optimizer.global_step-1)%100 == 0:
 				# if (optimizer.global_step-1)>0:
