@@ -26,32 +26,38 @@ class Net(nn.Module):
         # )
         # branch: class boundary detection
         self.fc_edge1 = nn.Sequential(
-            # nn.Conv2d(64, 64, 1, bias=False),
+            nn.Conv2d(64, 32, 1, bias=False),
             # nn.GroupNorm(4, 32),
             nn.MaxPool2d(2),
             # nn.ReLU(inplace=True),
         )
         self.fc_edge2 = nn.Sequential(
-            # nn.Conv2d(256, 128, 1, bias=False),
+            nn.Conv2d(256, 32, 1, bias=False),
             # nn.GroupNorm(4, 32),
             nn.MaxPool2d(2)
             # nn.ReLU(inplace=True),
         )
-        # self.fc_edge3 = nn.Sequential(
-        #     # nn.Conv2d(512, 256, 1, bias=False),
-        #     # nn.GroupNorm(4, 32),
-        #     # nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
-        #     # nn.ReLU(inplace=True),
-        # )
+        self.fc_edge3 = nn.Sequential(
+            nn.Conv2d(512, 32, 1, bias=False),
+            # nn.GroupNorm(4, 32),
+            # nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+            # nn.ReLU(inplace=True),
+        )
         self.fc_edge4 = nn.Sequential(
-            # nn.Conv2d(1024, 512, 1, bias=False),
+            nn.Conv2d(1024, 32, 1, bias=False),
             # nn.GroupNorm(4, 32),
             nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
             # nn.ReLU(inplace=True),
         )
+        # self.fc_edge5 = nn.Sequential(
+        #     nn.Conv2d(1024, 32, 1, bias=False),
+        #     # nn.GroupNorm(4, 32),
+        #     nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+        #     # nn.ReLU(inplace=True),
+        # )
 
         self.n_class = 20
-        self.kq = KQ(64+256+512+1024, KQ_DIM) #512+1024
+        self.kq = KQ(128, KQ_DIM) #512+1024 64+256+512+1024
         
         self.gap = Gap(2048, self.n_class)
         self.upscale_cam = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
@@ -68,10 +74,10 @@ class Net(nn.Module):
         x4 = self.stage4(x3)
         feats_loc = self.stage5(x4)  # N, 2048, KQ_FT_DIM, KQ_FT_DIM
 
-        edge1 = self.fc_edge1(x1)
-        edge2 = self.fc_edge2(x2)
-        edge3 = x3[..., :edge2.size(2), :edge2.size(3)]
-        edge4 = self.fc_edge4(x4)[..., :edge2.size(2), :edge2.size(3)]
+        edge1 = self.fc_edge1(F.normalize(x1,dim=1))
+        edge2 = self.fc_edge2(F.normalize(x2,dim=1))
+        edge3 = self.fc_edge2(F.normalize(x3,dim=1))[..., :edge2.size(2), :edge2.size(3)]
+        edge4 = self.fc_edge4(F.normalize(x4,dim=1))[..., :edge2.size(2), :edge2.size(3)]
         feats_rel = torch.cat([edge1, edge2, edge3, edge4], dim=1) #edge1, edge2, 
 
         K, Q = self.kq(feats_rel)
