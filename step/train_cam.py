@@ -99,7 +99,7 @@ def visualize_all_classes(hms, label, iterno, savepath, origin=False):
 
 def run(args):
 	model = getattr(importlib.import_module(args.cam_network), 'Net')()
-	wts = # load from file.
+	wts = torch.load('wts.pt') # load from file.
 	seed = 42
 	torch.manual_seed(seed)
 	torch.cuda.manual_seed(seed)
@@ -128,7 +128,7 @@ def run(args):
 	optimizer = torchutils.PolyOptimizer([
 		{'params': param_groups[0], 'lr': args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
 		# {'params': param_groups[1], 'lr': 10*args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
-		{'params': param_groups[2], 'lr': 10*args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
+		{'params': param_groups[2], 'lr': 5*args.cam_learning_rate, 'weight_decay': args.cam_weight_decay},
 	], lr=args.cam_learning_rate, weight_decay=args.cam_weight_decay, max_step=max_step)
 
 	model = torch.nn.DataParallel(model).cuda()
