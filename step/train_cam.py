@@ -99,8 +99,8 @@ def visualize_class_boudaries(clsbds, label, iterno, savepath):
 
 def run(args):
 	model = getattr(importlib.import_module(args.cam_network), 'Net')()
-	model.load_state_dict(torch.load('exp/normft_crssent_ftnormap02/sess/res50_cam.pth' + '.pth'), strict=True) #args.cam_weights_name
-	
+	model.load_state_dict(torch.load('exp/normft_normwt_nodetach02_03lr/sess/res50_cam.pth' + '.pth'), strict=True) #args.cam_weights_name
+	import pdb;pdb.set_trace()
 	seed = 42
 	torch.manual_seed(seed)
 	torch.cuda.manual_seed(seed)

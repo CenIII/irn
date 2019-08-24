@@ -60,8 +60,8 @@ class Net(nn.Module):
         #                         rel_pattern=[(3,2),(5,1),(5,3),(5,5)]) 
         self.bgap = Gap(2048, self.n_class)
         self.backbone = nn.ModuleList([self.stage4, self.stage5]) #self.stage1, self.stage2, self.stage3, 
-        self.convs = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge4]) #, self.kq
-        self.leaf_gaps = nn.ModuleList([self.gap, self.bgap])
+        self.convs = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge4, self.bgap]) #, self.kq
+        self.leaf_gaps = nn.ModuleList([self.gap])
         self.alpha = 2.
         self.bd_weight_dict = None
 
