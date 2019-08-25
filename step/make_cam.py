@@ -10,7 +10,9 @@ import os
 
 import voc12.dataloader
 from misc import torchutils, imutils
-
+import matplotlib
+matplotlib.use('agg')
+import matplotlib.pyplot as plt
 cudnn.enabled = True
 
 def _work(process_id, model, dataset, args):
@@ -54,7 +56,10 @@ def _work(process_id, model, dataset, args):
             # save cams
             np.save(os.path.join(args.cam_out_dir, img_name + '.npy'),
                     {"keys": valid_cat, "cam": strided_cam.cpu(), "high_res": highres_cam.cpu().numpy()})
-
+            # save image as well
+            for k in range(len(highres_cam)):
+                plt.imshow(highres_cam[k].cpu().numpy())
+                plt.savefig(os.path.join(args.cam_out_dir, img_name + '_'+str(k)+'.png'))
             if process_id == n_gpus - 1 and iter % (len(databin) // 20) == 0:
                 print("%d " % ((5*iter+1)//(len(databin) // 20)), end='')
 
@@ -66,7 +71,7 @@ def run(args):
 
     n_gpus = torch.cuda.device_count()
 
-    dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.train_list,
+    dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.infer_list,  #change from train to infer list.
                                                              voc12_root=args.voc12_root, scales=args.cam_scales)
     dataset = torchutils.split_dataset(dataset, n_gpus)
 
