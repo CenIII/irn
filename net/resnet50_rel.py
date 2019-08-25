@@ -75,7 +75,7 @@ class Net(nn.Module):
         top4 = torch.topk(wts,5,dim=1)[1]
         tmp = wts.scatter(1,top4,1.)
         tmp[tmp<1.] = 0.  #[20, 20]
-        gcam = torch.matmul(cam.view(N,C,-1).permute(0,2,1), tmp.transpose(0,1)).permute(0,2,1)#[2,20,1024].view(N,C,W,H)
+        gcam = torch.matmul(F.relu(cam.view(N,C,-1).permute(0,2,1)), tmp.transpose(0,1)).permute(0,2,1)#[2,20,1024].view(N,C,W,H)
         gcam = gcam * label[...,None]
         # classify on pixel.
         zzz = torch.max(gcam,dim=1) 
