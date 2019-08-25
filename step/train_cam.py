@@ -35,6 +35,8 @@ def validate(model, data_loader):
 			# x = model(img)
 			# loss1 = torchutils.batch_multilabel_loss(x, label)
 			preds, pred0, hms = model(img)
+			gmap = model.module.gather_maps(hms[-1], wts, label)
+			hms.append(gmap.permute(0,2,3,1))
 			# loss1 = torchutils.batch_multilabel_loss(preds, label, mean=True)
 			# wts = model.module.get_gap_weights()
 			loss1 = torchutils.multilabel_reweight_loss(preds[0], label) #, mean=True)
@@ -72,7 +74,7 @@ def visualize(x, net, hms, label, cb, iterno, img_denorm, savepath):
 	plt.close()
 	return cb
 
-def visualize_all_classes(hms, label, iterno, savepath, origin=False):
+def visualize_all_classes(hms, label, iterno, savepath, origin=0, descr='orig'):
 	# plt.figure(2)
 	class_name = ['aeroplane', 'bicycle', 'bird', 'boat',
 				'bottle', 'bus', 'car', 'cat', 'chair',
@@ -82,7 +84,7 @@ def visualize_all_classes(hms, label, iterno, savepath, origin=False):
 				'tvmonitor']
 
 	fig, ax = plt.subplots(nrows=4, ncols=5)
-	hms = hms[0] if origin else hms[-1]
+	hms = hms[origin]# if origin else hms[-1]
 	N,W,H,C = hms.shape
 	for i in range(0, C):
 		ax[int(i/5)][int(i%5)].imshow(hms[0][...,i].data.cpu().numpy())
@@ -91,9 +93,8 @@ def visualize_all_classes(hms, label, iterno, savepath, origin=False):
 	fig.suptitle('iteration '+str(iterno))
 	
 	# plt.pause(0.02)
-	savename = 'visual_train_'+str(iterno)+'_cams.png'
-	if origin:
-		savename = 'visual_train_'+str(iterno)+'_orig_cams.png'
+	savename = 'visual_train_'+str(iterno)+'_'+descr+'.png'
+	
 	plt.savefig(os.path.join(savepath, savename))
 	plt.close()
 
@@ -149,10 +150,14 @@ def run(args):
 			img = pack['img'].cuda()
 			label = pack['label'].cuda(non_blocking=True)
 			preds, pred0, hms = model(img)
+			gmap = model.module.gather_maps(hms[-1].permute(0,3,1,2), wts, label)
+			hms.append(gmap.permute(0,2,3,1))
+
 			if (optimizer.global_step-1)%10 == 0 and args.cam_visualize_train:
 				visualize(img, model.module, hms, label, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir)
-				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir)
-				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir, origin=True)
+				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir, origin=0, descr='orig')
+				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir, origin=1, descr='rewt')
+				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir, origin=2, descr='gather')
 			# wts = model.module.get_gap_weights()
 			loss = torchutils.multilabel_reweight_loss(preds[0], label, wts, tmpflag=flag) #, mean=True)
 			loss += F.multilabel_soft_margin_loss(pred0, label)
@@ -162,6 +167,8 @@ def run(args):
 				loss.backward()
 				clip_grad_norm_(model.parameters(), 1.)
 				optimizer.step()
+				with torch.no_grad():
+					model.module.bgap.lin.weight.div_(torch.norm(model.module.bgap.lin.weight, dim=1, keepdim=True))
 			flag = False
 			if (optimizer.global_step-1)%100 == 0:
 				# if (optimizer.global_step-1)>0:

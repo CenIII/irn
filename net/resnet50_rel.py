@@ -64,8 +64,27 @@ class Net(nn.Module):
         self.backbone = nn.ModuleList([self.stage4, self.stage5, self.stage4b, self.stage5b]) #self.stage1, self.stage2, self.stage3, 
         self.convs = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge4]) #, self.kq
         self.leaf_gaps = nn.ModuleList([self.gap, self.bgap])
+    
     def get_gap_weights(self):
         return self.gap.lin.weight.squeeze().detach()#F.normalize(,dim=1)
+
+    def gather_maps(self, cam, wts, label): #[2, 20, 32, 32]
+        # TODO: implement this. 
+        N,C,W,H = cam.shape
+        # import pdb;pdb.set_trace()
+        top4 = torch.topk(wts,4,dim=1)[1]
+        tmp = wts.scatter(1,top4,1.)
+        tmp[tmp<1.] = 0.  #[20, 20]
+        gcam = torch.matmul(cam.view(N,C,-1).permute(0,2,1), tmp.transpose(0,1)).permute(0,2,1)#[2,20,1024].view(N,C,W,H)
+        gcam = gcam * label[...,None]
+        # classify on pixel.
+        zzz = torch.max(gcam,dim=1) 
+        mask = torch.zeros_like(gcam).cuda()
+        mask = mask.scatter(1,zzz[1].unsqueeze(1),1.)
+        gcam = gcam * mask
+        gcam = gcam.view(N,C,W,H)
+        
+        return gcam
 
     def infer(self, x, train=True):
         x1 = self.stage1(x).detach()
@@ -99,8 +118,8 @@ class Net(nn.Module):
     def forward(self, x):
 
         pred0, cam0, preds, cams = self.infer(x)
-
-        hms = self.save_hm(cam0, cams[0], cams[-1])
+        
+        hms = self.save_hm(cam0, cams[0])
         
         return preds, pred0, hms
 
@@ -132,11 +151,12 @@ class CAM(Net):
     def __init__(self):
         super(CAM, self).__init__()
 
-    def forward(self, x):
+    def forward(self, x, wts,label):
         pred0, cam0, preds, cams = self.infer(x, train=False)
         # x = F.conv2d(x, self.classifier.weight)
-        x = F.relu(cams[-1])
         
+        x = self.gather_maps(x,wts,label)
+        x = F.relu(cams[-1])
         x = x[0] + x[1].flip(-1)
 
         return x

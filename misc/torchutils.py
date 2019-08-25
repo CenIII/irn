@@ -149,7 +149,7 @@ def multilabel_reweight_loss(input, target, cls_wts=None,weight=None,reduction='
     wts = torch.zeros_like(target).type(device.FloatTensor)
     if cls_wts is not None:
         # import pdb;pdb.set_trace()
-        top10 = torch.topk(cls_wts,7,dim=1)[1]
+        top10 = torch.topk(cls_wts,6,dim=1)[1]
         tmp = cls_wts.scatter(1,top10,1.)
         tmp[tmp<1.] = 0.
         affset = torch.matmul(target,tmp) # [16,20]
