@@ -18,7 +18,10 @@ import numpy as np
 from torch.nn.utils import clip_grad_norm_
 import os
 import random
-	
+
+import tqdm
+import pickle 
+
 def validate(model, data_loader):
 	print('validating ... ', flush=True, end='')
 
@@ -140,44 +143,65 @@ def run(args):
 
 	cb = [None, None, None, None]
 	img_denorm = torchutils.ImageDenorm()
+	
+	class_cnt = np.zeros(20)#{i:0 for i in range(20)}
+	cocur_cnt = np.zeros([20,20])
 	for ep in range(args.cam_num_epoches):
 
 		print('Epoch %d/%d' % (ep+1, args.cam_num_epoches))
 		flag = False
-		for step, pack in enumerate(train_data_loader):
-
+		
+		qdar = tqdm.tqdm(enumerate(train_data_loader), total=len(train_data_loader), ascii=True)
+		# for step, pack in enumerate(train_data_loader):
+		for step,pack in qdar:
 			img = pack['img'].cuda()
 			label = pack['label'].cuda(non_blocking=True)
-			preds, pred0, hms = model(img)
-			if (optimizer.global_step-1)%10 == 0 and args.cam_visualize_train:
-				visualize(img, model.module, hms, label, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir)
-				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir)
-				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir, origin=True)
-			# wts = model.module.get_gap_weights()
-			loss = torchutils.multilabel_reweight_loss(preds[0], label, wts, tmpflag=flag) #, mean=True)
-			loss += F.multilabel_soft_margin_loss(pred0, label)
-			avg_meter.add({'loss1': loss.item()})
-			with autograd.detect_anomaly():
-				optimizer.zero_grad()
-				loss.backward()
-				clip_grad_norm_(model.parameters(), 1.)
-				optimizer.step()
-			flag = False
-			if (optimizer.global_step-1)%100 == 0:
-				# if (optimizer.global_step-1)>0:
-				# 	flag = True
-				timer.update_progress(optimizer.global_step / max_step)
 
-				print('step:%5d/%5d' % (optimizer.global_step - 1, max_step),
-					  'loss:%.4f' % (avg_meter.pop('loss1')),
-					  'imps:%.1f' % ((step + 1) * args.cam_batch_size / timer.get_stage_elapsed()),
-					  'lr: %.4f' % (optimizer.param_groups[0]['lr']),
-					  'etc:%s' % (timer.str_estimated_complete()), flush=True)
+			# stat
+			# import pdb;pdb.set_trace()		
+			clss = label.squeeze().nonzero()[:,0]
+			for c in clss:
+				class_cnt[c] = class_cnt[c] + 1 
+			if len(clss) > 1:
+				for i in range(len(clss)):
+					for j in range(i+1,len(clss)):
+						# import pdb;pdb.set_trace()
+						cocur_cnt[clss[i],clss[j]] += 1
+
+
+			# preds, pred0, hms = model(img)
+			# if (optimizer.global_step-1)%10 == 0 and args.cam_visualize_train:
+			# 	visualize(img, model.module, hms, label, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir)
+			# 	visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir)
+			# 	visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir, origin=True)
+			# # wts = model.module.get_gap_weights()
+			# loss = torchutils.multilabel_reweight_loss(preds[0], label, wts, tmpflag=flag) #, mean=True)
+			# loss += F.multilabel_soft_margin_loss(pred0, label)
+			# avg_meter.add({'loss1': loss.item()})
+			# with autograd.detect_anomaly():
+			# 	optimizer.zero_grad()
+			# 	loss.backward()
+			# 	clip_grad_norm_(model.parameters(), 1.)
+			# 	optimizer.step()
+			# flag = False
+			# if (optimizer.global_step-1)%100 == 0:
+			# 	# if (optimizer.global_step-1)>0:
+			# 	# 	flag = True
+			# 	timer.update_progress(optimizer.global_step / max_step)
+
+			# 	print('step:%5d/%5d' % (optimizer.global_step - 1, max_step),
+			# 		  'loss:%.4f' % (avg_meter.pop('loss1')),
+			# 		  'imps:%.1f' % ((step + 1) * args.cam_batch_size / timer.get_stage_elapsed()),
+			# 		  'lr: %.4f' % (optimizer.param_groups[0]['lr']),
+			# 		  'etc:%s' % (timer.str_estimated_complete()), flush=True)
 
 		else:
-			torch.save(model.module.state_dict(), args.cam_weights_name + '.pth')
-			validate(model, val_data_loader)
+			# torch.save(model.module.state_dict(), args.cam_weights_name + '.pth')
+			# validate(model, val_data_loader)
 			timer.reset_stage()
 
-	torch.save(model.module.state_dict(), args.cam_weights_name + '.pth')
+	pack = {'class_cnt':class_cnt, 'cocur_cnt':cocur_cnt}
+	with open('clss_stat.pkl','wb') as f:
+		pickle.dump(pack,f)
+	# torch.save(model.module.state_dict(), args.cam_weights_name + '.pth')
 	torch.cuda.empty_cache()
