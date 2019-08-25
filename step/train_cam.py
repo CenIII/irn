@@ -19,7 +19,9 @@ from torch.nn.utils import clip_grad_norm_
 import os
 import random
 	
-def validate(model, data_loader):
+COOC_THRES = 0.06
+
+def validate(model, data_loader, weight):
 	print('validating ... ', flush=True, end='')
 
 	val_loss_meter = pyutils.AverageMeter('loss1', 'loss2')
@@ -39,7 +41,7 @@ def validate(model, data_loader):
 			# hms.append(gmap.permute(0,2,3,1))
 			# loss1 = torchutils.batch_multilabel_loss(preds, label, mean=True)
 			# wts = model.module.get_gap_weights()
-			loss1 = torchutils.multilabel_reweight_loss(preds[0], label) #, mean=True)
+			loss1 = torchutils.multilabel_reweight_loss(preds[0], label,weight=weight) #, mean=True)
 			loss1 += F.multilabel_soft_margin_loss(pred0, label)
 
 			val_loss_meter.add({'loss1': loss1.item()})
@@ -98,9 +100,33 @@ def visualize_all_classes(hms, label, iterno, savepath, origin=0, descr='orig'):
 	plt.savefig(os.path.join(savepath, savename))
 	plt.close()
 
+def stat_update(wts):
+    # load stats
+	with open('clss_stat.pkl','rb') as f:
+		stat = pickle.load(f)
+
+	clss_cnt = stat['class_cnt']
+	cocur_cnt = stat['cocur_cnt']
+	cocur_cnt = cocur_cnt/np.sqrt((clss_cnt[:,None]*clss_cnt[None,:]))
+	import pdb;pdb.set_trace()
+	# 1. loss class weight
+	invc = 1/clss_cnt
+	weight = torch.from_numpy(invc/invc.sum()*20).cuda()
+	# 2. coocurrence cnt update wts
+	cocur_cnt[cocur_cnt<COOC_THRES] = 0.
+	cocur_cnt /= COOC_THRES
+	cocur_cnt[cocur_cnt<1.] = 1.
+
+	wts /= torch.from_numpy(cocur_cnt).cuda()
+
+	return wts, weight
+
 def run(args):
 	model = getattr(importlib.import_module(args.cam_network), 'Net')()
 	wts = torch.load('wts.pt').cuda() # load from file.
+
+	wts, weight = stat_update(wts)
+
 	seed = 42
 	torch.manual_seed(seed)
 	torch.cuda.manual_seed(seed)
@@ -141,6 +167,8 @@ def run(args):
 
 	cb = [None, None, None, None]
 	img_denorm = torchutils.ImageDenorm()
+
+
 	for ep in range(args.cam_num_epoches):
 
 		print('Epoch %d/%d' % (ep+1, args.cam_num_epoches))
@@ -159,7 +187,7 @@ def run(args):
 				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir, origin=1, descr='rewt')
 				visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir, origin=2, descr='gather')
 			# wts = model.module.get_gap_weights()
-			loss = torchutils.multilabel_reweight_loss(preds[0], label, wts, tmpflag=flag) #, mean=True)
+			loss = torchutils.multilabel_reweight_loss(preds[0], label, wts, weight=weight, tmpflag=flag) #, mean=True)
 			loss += F.multilabel_soft_margin_loss(pred0, label)
 			avg_meter.add({'loss1': loss.item()})
 			with autograd.detect_anomaly():
@@ -183,7 +211,7 @@ def run(args):
 
 		else:
 			torch.save(model.module.state_dict(), args.cam_weights_name + '.pth')
-			validate(model, val_data_loader)
+			validate(model, val_data_loader, weight)
 			timer.reset_stage()
 
 	torch.save(model.module.state_dict(), args.cam_weights_name + '.pth')
