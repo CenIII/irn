@@ -18,6 +18,7 @@ import numpy as np
 from torch.nn.utils import clip_grad_norm_
 import os
 import random
+import pickle
 	
 COOC_THRES = 0.06
 
@@ -108,16 +109,17 @@ def stat_update(wts):
 	clss_cnt = stat['class_cnt']
 	cocur_cnt = stat['cocur_cnt']
 	cocur_cnt = cocur_cnt/np.sqrt((clss_cnt[:,None]*clss_cnt[None,:]))
-	import pdb;pdb.set_trace()
+	cocur_cnt += cocur_cnt.transpose()
+	# import pdb;pdb.set_trace()
 	# 1. loss class weight
 	invc = 1/clss_cnt
-	weight = torch.from_numpy(invc/invc.sum()*20).cuda()
+	weight = torch.from_numpy(invc/invc.sum()*20).type(torch.cuda.FloatTensor)
 	# 2. coocurrence cnt update wts
 	cocur_cnt[cocur_cnt<COOC_THRES] = 0.
 	cocur_cnt /= COOC_THRES
 	cocur_cnt[cocur_cnt<1.] = 1.
 
-	wts /= torch.from_numpy(cocur_cnt).cuda()
+	wts /= torch.from_numpy(cocur_cnt).type(torch.cuda.FloatTensor)
 
 	return wts, weight
 

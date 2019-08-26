@@ -14,18 +14,20 @@ import matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
 cudnn.enabled = True
+import tqdm
+import imageio
 
 def _work(process_id, model, dataset, args):
 
     databin = dataset[process_id]
     n_gpus = torch.cuda.device_count()
     data_loader = DataLoader(databin, shuffle=False, num_workers=args.num_workers // n_gpus, pin_memory=False)
-
+    img_denorm = torchutils.ImageDenorm()
     with torch.no_grad(), cuda.device(process_id):
 
         model.cuda()
-
-        for iter, pack in enumerate(data_loader):
+        qdar = tqdm.tqdm(enumerate(data_loader),total=len(data_loader),ascii=True,position=process_id)
+        for iter, pack in qdar:
 
             img_name = pack['name'][0]
             label = pack['label'][0]
@@ -58,8 +60,12 @@ def _work(process_id, model, dataset, args):
                     {"keys": valid_cat, "cam": strided_cam.cpu(), "high_res": highres_cam.cpu().numpy()})
             # save image as well
             for k in range(len(highres_cam)):
-                plt.imshow(highres_cam[k].cpu().numpy())
-                plt.savefig(os.path.join(args.cam_out_dir, img_name + '_'+str(k)+'.png'))
+                imageio.imwrite(os.path.join(args.cam_out_dir, img_name + '_'+str(k)+'.png'), (255*highres_cam[k].cpu().numpy()).astype(np.uint8))
+                # plt.imshow(highres_cam[k].cpu().numpy())
+                # plt.savefig(os.path.join(args.cam_out_dir, img_name + '_'+str(k)+'.png'))
+            imageio.imwrite(os.path.join(args.cam_out_dir, img_name + '.png'), img_denorm(pack['img'][0][0][0].permute(1,2,0).cpu().numpy()).astype(np.uint8))
+            # plt.imshow(img_denorm(pack['img'][0][0][0].permute(1,2,0).cpu().numpy()).astype(np.int32))
+            # plt.savefig(os.path.join(args.cam_out_dir, img_name + '.png'))
             if process_id == n_gpus - 1 and iter % (len(databin) // 20) == 0:
                 print("%d " % ((5*iter+1)//(len(databin) // 20)), end='')
 

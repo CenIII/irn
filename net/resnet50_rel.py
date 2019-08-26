@@ -151,11 +151,11 @@ class CAM(Net):
     def __init__(self):
         super(CAM, self).__init__()
 
-    def forward(self, x, wts,label):
+    def forward(self, x): #, wts,label
         pred0, cam0, preds, cams = self.infer(x, train=False)
         # x = F.conv2d(x, self.classifier.weight)
         
-        x = self.gather_maps(x,wts,label)
+        # x = self.gather_maps(x,wts,label)
         x = F.relu(cams[-1])
         x = x[0] + x[1].flip(-1)
 
