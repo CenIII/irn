@@ -18,14 +18,10 @@ class Net(nn.Module):
         self.stage3 = nn.Sequential(self.resnet50.layer3)
         self.stage4 = nn.Sequential(self.resnet50.layer4)
 
-        self.conv = nn.Sequential(nn.Conv2d(2048,64,1,bias=False),
-                                    nn.GroupNorm(4, 64),
-                                    nn.ReLU(inplace=True)
-                                )
-        self.classifier = nn.Conv2d(64, 20, 1, bias=False)
+        self.classifier = nn.Conv2d(2048, 20, 1, bias=False)
 
         self.backbone = nn.ModuleList([self.stage1, self.stage2, self.stage3, self.stage4])
-        self.newly_added = nn.ModuleList([self.conv,self.classifier])
+        self.newly_added = nn.ModuleList([self.classifier])
 
     def forward(self, x):
 
@@ -35,15 +31,11 @@ class Net(nn.Module):
         x = self.stage3(x)
         x = self.stage4(x)  # N, 2048, 32, 32
         
-        x = self.conv(x)
 
-        x = torchutils.gap2d(x, keepdims=True) # N, 2048, 1, 1
+        # x = torchutils.gap2d(x, keepdims=True) # N, 2048, 1, 1
         x = self.classifier(x) # N, 20, 32, 32
-
-        # x = torchutils.leaky_log(x)
-        # x = torchutils.gap2d(x) # N, 20
         
-        x = x.view(-1, 20) # N, 20
+        # x = x.view(-1, 20) # N, 20
 
         return x
 
@@ -72,8 +64,6 @@ class CAM(Net):
         x = self.stage3(x)
 
         x = self.stage4(x)
-
-        x = self.conv(x)
 
         x = F.conv2d(x, self.classifier.weight)
         x = F.relu(x)

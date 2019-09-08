@@ -220,6 +220,7 @@ class VOC12SegmentationDataset(Dataset):
         self.img_normal = img_normal
         self.hor_flip = hor_flip
         self.crop_method = crop_method
+        self.label_list = load_image_label_list_from_npy(self.img_name_list)
 
     def __len__(self):
         return len(self.img_name_list)
@@ -250,7 +251,7 @@ class VOC12SegmentationDataset(Dataset):
 
         img = imutils.HWC_to_CHW(img)
 
-        return {'name': name, 'img': img, 'label': label}
+        return {'name': name, 'img': img, 'label': label, 'cls_label': torch.from_numpy(self.label_list[idx])}
 
 class VOC12AffinityDataset(VOC12SegmentationDataset):
     def __init__(self, img_name_list_path, label_dir, crop_size, voc12_root,

@@ -32,11 +32,10 @@ except ImportError:
     has_pyinn = False
     pass
 
-from utils import test_utils
+# from utils import test_utils
 
 import torch
 import torch.nn as nn
-from torch.nn import functional as nnfun
 from torch.autograd import Variable
 from torch.nn.parameter import Parameter
 
@@ -125,20 +124,20 @@ class ClsbdCRF(nn.Module):
         self.conf = conf
         self.nclasses = nclasses
 
-        self.pos_sdims = torch.Tensor([1 / conf['pos_feats']['sdims']])
+        self.pos_sdims = 1 / conf['pos_feats']['sdims'] #torch.Tensor([1 / conf['pos_feats']['sdims']])
         # self.col_sdims = None
         # self.col_schan = torch.Tensor([1 / conf['col_feats']['schan']])
-        self.col_compat = torch.Tensor([conf['col_feats']['compat']])
-        self.pos_compat = torch.Tensor([conf['pos_feats']['compat']])
+        self.col_compat = conf['col_feats']['compat'] #torch.Tensor([conf['col_feats']['compat']])
+        self.pos_compat = conf['pos_feats']['compat'] #torch.Tensor([conf['pos_feats']['compat']])
 
         if conf['weight'] is None:
             weight = None
         elif conf['weight'] == 'scalar':
             val = conf['weight_init']
-            weight = torch.Tensor([val])
+            weight = torch.Tensor([val]).cuda()
         elif conf['weight'] == 'vector':
             val = conf['weight_init']
-            weight = val * torch.ones(1, nclasses, 1, 1)
+            weight = val * torch.ones(1, nclasses, 1, 1).cuda()
 
         self.CRF = ConvCRF(
             nclasses, mode="col", conf=conf,
@@ -169,11 +168,12 @@ class ClsbdCRF(nn.Module):
         conf = self.conf
 
         bs, c, x, y = clsbd.shape
-        pos_feats = self.create_position_feats(clsbd.shape, sdims=self.pos_sdims, bs=bs)
+        
+        pos_feats = self.create_position_feats(clsbd.shape[-2:], sdims=self.pos_sdims, bs=bs)
 
         compats = [self.col_compat,self.pos_compat]
         is_clsbd_list = [True, False]
-
+        
         self.CRF.add_pairwise_energies([clsbd, pos_feats],
                                        compats, is_clsbd_list, conf['merge'])
 
@@ -182,12 +182,12 @@ class ClsbdCRF(nn.Module):
         self.CRF.clean_filters()
         return prediction
 
-    def _create_mesh(self, requires_grad=False):
-        hcord_range = [range(s) for s in self.shape]
+    def _create_mesh(self, shape, requires_grad=False):
+        hcord_range = [range(s) for s in shape]
         mesh = np.array(np.meshgrid(*hcord_range, indexing='ij'),
                         dtype=np.float32)
 
-        return torch.from_numpy(mesh)
+        return torch.from_numpy(mesh).cuda()
 
     # def create_colour_feats(self, img, schan, sdims=0.0, bias=True, bs=1):
     #     norm_img = img * schan
@@ -590,10 +590,9 @@ class ConvCRF(nn.Module):
             else:
                 prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * (pos_message + neg_message)
 
-            if not i == num_iter - 1 or self.final_softmax:
-                if self.conf['softmax']:
-                    prediction = F.softmax(prediction, dim=1)
-
+            # if not i == num_iter - 1 or self.final_softmax:
+            #     if self.conf['softmax']:
+            prediction = F.softmax(prediction, dim=1)
         return prediction
 
 
@@ -604,22 +603,22 @@ def get_test_conf():
 def get_default_conf():
     return default_conf.copy()
 
-if __name__ == "__main__":
-    conf = get_test_conf()
-    tcrf = GaussCRF(conf, [10, 10], None).cuda()
+# if __name__ == "__main__":
+#     conf = get_test_conf()
+#     tcrf = GaussCRF(conf, [10, 10], None).cuda()
 
-    unary = test_utils._get_simple_unary()
-    img = test_utils._get_simple_img()
+#     unary = test_utils._get_simple_unary()
+#     img = test_utils._get_simple_img()
 
-    img = np.transpose(img, [2, 0, 1])
-    img_torch = Variable(torch.Tensor(img), requires_grad=False).cuda()
+#     img = np.transpose(img, [2, 0, 1])
+#     img_torch = Variable(torch.Tensor(img), requires_grad=False).cuda()
 
-    unary_var = Variable(torch.Tensor(unary)).cuda()
-    unary_var = unary_var.view(2, 10, 10)
-    img_var = Variable(torch.Tensor(img)).cuda()
+#     unary_var = Variable(torch.Tensor(unary)).cuda()
+#     unary_var = unary_var.view(2, 10, 10)
+#     img_var = Variable(torch.Tensor(img)).cuda()
 
-    prediction = tcrf.forward(unary_var, img_var).cpu().data.numpy()
-    res = np.argmax(prediction, axis=0)
-    import scipy.misc
-    scp.misc.imsave("out.png", res)
-    # d.addPairwiseBilateral(2, 2, img, 3)
+#     prediction = tcrf.forward(unary_var, img_var).cpu().data.numpy()
+#     res = np.argmax(prediction, axis=0)
+#     import scipy.misc
+#     scp.misc.imsave("out.png", res)
+#     # d.addPairwiseBilateral(2, 2, img, 3)

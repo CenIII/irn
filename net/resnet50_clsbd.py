@@ -105,30 +105,45 @@ class Net(nn.Module):
         return edge_out
 
     def make_unary(self, unary_raw, label):
-        # TODO: implement this. 
-        import pdb;pdb.set_trace()
         # unary_raw [N, 21, W, H]
         # 1. rescale
-        strided_cam = F.interpolate(torch.unsqueeze(unary_raw, 0), 4, mode='bilinear', align_corners=False)[0]
+        unary_raw = F.interpolate(unary_raw, label.shape[-2:], mode='bilinear', align_corners=False)#[0] #torch.unsqueeze(unary_raw, 0)
         # 2. add background
-        # 3. mask
-        unary = strided_cam*label
-        
+        unary_raw = F.pad(unary_raw, (0, 0, 0, 0, 1, 1, 0, 0), mode='constant',value=5.)
+        # 3. create and apply mask
+        label[label==255.] = 21
+        label = label.unsqueeze(1)
+        mask = torch.zeros_like(unary_raw).cuda()
+        mask = mask.scatter_(1,label.type(torch.cuda.LongTensor),1)
+        unary = (unary_raw * mask)[:,:-1]
         return unary 
 
     def forward(self, x, label):
         unary_raw = self.cam_net(x)
+        unary_raw = F.relu(unary_raw).detach()
         unary = self.make_unary(unary_raw, label)
         clsbd = self.infer_clsbd(x)
         clsbd = torch.sigmoid(clsbd)
-
         pred = self.convcrf(unary, clsbd)
+        hms = self.save_hm(unary,clsbd.repeat(1,21,1,1),pred)
+        return pred, hms
 
-        return pred
+    def getHeatmaps(self, hms, classid):
+        hm = []
+        for heatmap in hms:
+            zzz = classid[:, None, None, None].repeat(1, heatmap.shape[1], heatmap.shape[2], 1)
+            hm.append(torch.gather(heatmap, 3, zzz).squeeze())
+        return hm
+
+    def save_hm(self, *cams):
+        hm = []
+        for cam in cams:
+            hm.append(cam.permute(0,2,3,1))
+        return hm
 
     def trainable_parameters(self):
 
-        return (tuple(self.edge_layers.parameters())#, tuple(self.dp_layers.parameters()))
+        return (tuple(self.edge_layers.parameters()))#, tuple(self.dp_layers.parameters()))
 
     def train(self, mode=True):
         super().train(mode)
