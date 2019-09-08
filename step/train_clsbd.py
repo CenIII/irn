@@ -11,11 +11,12 @@ def run(args):
 
     path_index = indexing.PathIndex(radius=10, default_size=(args.irn_crop_size // 4, args.irn_crop_size // 4))
 
-    model = getattr(importlib.import_module(args.irn_network), 'AffinityDisplacement')(
-        path_index.default_path_indices,
-        torch.from_numpy(path_index.default_src_indices),
-        torch.from_numpy(path_index.default_dst_indices))
+    cam = getattr(importlib.import_module(args.cam_network), 'Net')()
+    cam.load_state_dict(torch.load(args.cam_weights_name + '.pth'), strict=True)
+    cam.eval()
 
+    model = getattr(importlib.import_module(args.irn_network), 'Net')(cam)
+    
     train_dataset = voc12.dataloader.VOC12AffinityDataset(args.train_list,
                                                           label_dir=args.ir_label_out_dir,
                                                           voc12_root=args.voc12_root,
@@ -50,11 +51,13 @@ def run(args):
         for iter, pack in enumerate(train_data_loader):
 
             img = pack['img'].cuda(non_blocking=True)
-            bg_pos_label = pack['aff_bg_pos_label'].cuda(non_blocking=True)
-            fg_pos_label = pack['aff_fg_pos_label'].cuda(non_blocking=True)
-            neg_label = pack['aff_neg_label'].cuda(non_blocking=True)
+            label = pack['reduced_label'].cuda(non_blocking=True)
+            # bg_pos_label = pack['aff_bg_pos_label'].cuda(non_blocking=True)
+            # fg_pos_label = pack['aff_fg_pos_label'].cuda(non_blocking=True)
+            # neg_label = pack['aff_neg_label'].cuda(non_blocking=True)
 
-            pred = model(img)
+            pred = model(img, label)
+            # TODO: masked pixel cross-entropy loss compute. 
 
             # avg_meter.add({'loss1': pos_aff_loss, 'loss2': neg_aff_loss, 'loss3': dp_fg_loss.item(), 'loss4': dp_bg_loss.item()})
 

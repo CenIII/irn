@@ -213,15 +213,6 @@ def show_memusage(device=0, name=""):
     logging.info("{:>5}/{:>5} MB Usage at {}".format(
         item["memory.used"], item["memory.total"], name))
 
-
-def exp_and_normalize(features, dim=0):
-    """
-    Aka "softmax" in deep learning literature
-    """
-    normalized = torch.nn.functional.softmax(features, dim=dim)
-    return normalized
-
-
 def _get_ind(dz):
     if dz == 0:
         return 0, 0
@@ -278,8 +269,13 @@ class MessagePassingCol():
 
         self.matmul = matmul
 
-        self._gaus_list = []
+        self._gaus_list = {}
         self._norm_list = []
+
+        def add_gaus(gaus,key):
+            tmp = self._gaus_list.setdefault(key,[])
+            tmp.append(gaus)
+            self._gaus_list[key] = tmp
 
         for feats, compat, is_clsbd in zip(feat_list, compat_list, is_clsbd_list):
             gaussian = self._create_convolutional_filters(feats, is_clsbd)
@@ -288,14 +284,11 @@ class MessagePassingCol():
                 self._norm_list.append(mynorm)
             else:
                 self._norm_list.append(None)
-
-            gaussian = compat * gaussian
-            self._gaus_list.append(gaussian)
-
-        if merge:
-            self.gaussian = sum(self._gaus_list)
-            if not norm == 'none':
-                raise NotImplementedError
+            add_gaus(compat*gaussian,'neg')
+            if is_clsbd:
+                add_gaus(compat*(1.-gaussian),'pos')    
+        for k,v in self._gaus_list.items():
+            self._gaus_list[k] = sum(v)
 
     def _get_norm(self, gaus):
         norm_tensor = torch.ones([1, 1, self.npixels[0], self.npixels[1]])
@@ -312,72 +305,12 @@ class MessagePassingCol():
         return ii,jj
 
     def _expand_circle(self,tmp_arr,span,i):
-        # TODO: implement this. 
         if i%2 == 1:
             inds = [0]*2+list(range(1,2*i))+[2*i]*2+[0]+[2*i]+list(range(2*i+1,6*i-1))+[6*i-1]+[8*i-1]+[6*i-1]*2 + list(range(6*i,8*i-1))+[8*i-1]*2
         else:
             inds = [0,1] + list(range(1,2*i)) + [2*i-1] + [2*i] + [2*i+1, 2*i+2] + list(range(2*i+1,6*i-1)) + list(range(6*i-3,6*i+1)) + list(range(6*i,8*i-1)) + [8*i-2,8*i-1]
         tmp_arr = tmp_arr[:,inds]
         return tmp_arr
-
-    def _create_convolutional_filters_clsbd(self, features):
-        # features value range [0,1]
-        span = self.span    
-
-        bs = features.shape[0]
-
-        if self.blur > 1:
-            off_0 = (self.blur - self.npixels[0] % self.blur) % self.blur
-            off_1 = (self.blur - self.npixels[1] % self.blur) % self.blur
-            pad_0 = math.ceil(off_0 / 2)
-            pad_1 = math.ceil(off_1 / 2)
-            if self.blur == 2:
-                assert(pad_0 == self.npixels[0] % 2)
-                assert(pad_1 == self.npixels[1] % 2)
-
-            features = torch.nn.functional.avg_pool2d(features,
-                                                      kernel_size=self.blur,
-                                                      padding=(pad_0, pad_1),
-                                                      count_include_pad=False)
-
-            npixels = [math.ceil(self.npixels[0] / self.blur),
-                       math.ceil(self.npixels[1] / self.blur)]
-            assert(npixels[0] == features.shape[2])
-            assert(npixels[1] == features.shape[3])
-        else:
-            npixels = self.npixels
-
-        gaussian_tensor = features.data.new(
-            bs, self.filter_size, self.filter_size,
-            npixels[0], npixels[1]).fill_(0)
-
-        gaussian = Variable(gaussian_tensor)
-
-        # TODO: fill gaussian tensor
-            # goal: features [1, 1, 86, 125] --> col [1, 7, 7, 86, 125] -tmp_arr-> gaussian [1, 7, 7, 86, 125]
-        # 1. make col
-        cols = F.unfold(features, self.filter_size, 1, self.span)
-        cols = cols.view(bs, self.filter_size, self.filter_size, npixels[0], npixels[1]) #[1, 7, 7, 86, 125]
-        # 2. for i in range(span), fill gaussian
-        tmp_arr = cols.data.new(bs,8,npixels[0], npixels[1]).fill_(0)
-
-        for i in range(1,span+1):
-            # extract ith circle [1,i*8,86,125] from cols
-            ii, jj = self._get_circle_inds(span,i)
-            src_arr = cols[:,ii,jj]
-            # compare with tmp_arr, max to obtain new tmp_arr
-            tmp_arr = torch.max(src_arr,tmp_arr)
-            # assign tmp_arr to ith circle of gaussian
-            gaussian[:,ii,jj] += tmp_arr
-            # expand tmp_arr via index selection
-            tmp_arr = self._expand_circle(tmp_arr,span,i)
-            # Question: gaussian center element? 
-        gaussian = 1. - gaussian
-        gaussian[:,span,span] = 1.
-
-        return gaussian.view(
-            bs, 1, self.filter_size, self.filter_size,
-            npixels[0], npixels[1])
 
     def _create_convolutional_filters(self, features, is_clsbd):
 
@@ -413,7 +346,6 @@ class MessagePassingCol():
         gaussian = Variable(gaussian_tensor)
 
         if is_clsbd:
-            # TODO: fill gaussian tensor
             # goal: features [1, 1, 86, 125] --> col [1, 7, 7, 86, 125] -tmp_arr-> gaussian [1, 7, 7, 86, 125]
             # 1. make col
             cols = F.unfold(features, self.filter_size, 1, self.span)
@@ -454,17 +386,6 @@ class MessagePassingCol():
         return gaussian.view(
             bs, 1, self.filter_size, self.filter_size,
             npixels[0], npixels[1])
-
-    def compute(self, input):
-        if self.merge:
-            pred = self._compute_gaussian(input, self.gaussian)
-        else:
-            assert(len(self._gaus_list) == len(self._norm_list))
-            pred = 0
-            for gaus, norm in zip(self._gaus_list, self._norm_list):
-                pred += self._compute_gaussian(input, gaus, norm)
-
-        return pred
 
     def _compute_gaussian(self, input, gaussian, norm=None):
 
@@ -549,7 +470,19 @@ class MessagePassingCol():
             message = norm * message
 
         return message
-
+        
+    def compute(self, input):
+        # if self.merge:
+        #     pred = self._compute_gaussian(input, self.gaussian)
+        # else:
+        #     # assert(len(self._gaus_list) == len(self._norm_list))
+        #     pred = 0
+        #     for gaus, norm in zip(self._gaus_list, self._norm_list):
+        #         pred += self._compute_gaussian(input, gaus, norm)
+        preds = {}
+        for k,v in self._gaus_list.items():
+            preds[k] = self._compute_gaussian(input, v)
+        return preds
 
 class ConvCRF(nn.Module):
     """
@@ -605,16 +538,13 @@ class ConvCRF(nn.Module):
         else:
             register('weight', weight)
 
-        if convcomp:
-            self.comp = nn.Conv2d(nclasses, nclasses,
-                                  kernel_size=1, stride=1, padding=0,
-                                  bias=False)
-            # self.comp.weight.data.fill_(0.1 * math.sqrt(2.0 / nclasses))
-            self.comp.weight.data = torch.ones_like(self.comp.weight.data)
-            for i in range(self.nclasses):
-                self.comp.weight.data[i,i] = 0.
-        else:
-            self.comp = None
+        self.neg_comp = nn.Conv2d(nclasses, nclasses,
+                                kernel_size=1, stride=1, padding=0,
+                                bias=False)
+        # self.comp.weight.data.fill_(0.1 * math.sqrt(2.0 / nclasses))
+        self.neg_comp.weight.data = torch.ones_like(self.neg_comp.weight.data)
+        for i in range(self.nclasses):
+            self.neg_comp.weight.data[i,i] = 0.
 
     def clean_filters(self):
         self.kernel = None
@@ -642,34 +572,27 @@ class ConvCRF(nn.Module):
 
     def inference(self, unary, num_iter=5):
         # FIXME: unary must be logits from cam layer. psi_unary = -unary and prediction = softmax(unary)
-        if not self.conf['logsoftmax']:
-            psi_unary = torch.log(unary)
-            prediction = exp_and_normalize(psi_unary, dim=1)
-        else:
-            # △ 0 Initialize: Q(i.e. prediction) and psi(i.e. psi_unary)
-            psi_unary = - nnfun.log_softmax(unary, dim=1, _stacklevel=5)
-            if self.conf['softmax']:
-                prediction = unary #nnfun.softmax(unary, dim=1) # exp_and_normalize(psi_unary, dim=1)
-            else:
-                prediction = - psi_unary
+        # △ 0 Initialize: Q(i.e. prediction) and psi(i.e. psi_unary)
+        psi_unary = - unary
+        prediction = F.softmax(unary, dim=1)
 
         for i in range(num_iter):
             # △ 1 Message passing
-            message = self.kernel.compute(prediction)
-            # import pdb;pdb.set_trace()
+            messages = self.kernel.compute(prediction)
+
             # △ 2 Compatibility transform
-            if self.comp is not None:
-                message = self.comp(message)
+            neg_message = self.neg_comp(messages['neg'])
+            pos_message = messages['pos']
 
             # △ 3 Local Update (and normalize)
             if self.weight is None:
-                prediction = - psi_unary - message
+                prediction = - psi_unary - pos_message - neg_message
             else:
-                prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * message
+                prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * (pos_message + neg_message)
 
             if not i == num_iter - 1 or self.final_softmax:
                 if self.conf['softmax']:
-                    prediction = exp_and_normalize(prediction, dim=1)
+                    prediction = F.softmax(prediction, dim=1)
 
         return prediction
 

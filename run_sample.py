@@ -52,7 +52,7 @@ if __name__ == '__main__':
     parser.add_argument("--conf_bg_thres", default=0.05, type=float)
 
     # Inter-pixel Relation Network (IRNet)
-    parser.add_argument("--irn_network", default="net.resnet50_irn", type=str)
+    parser.add_argument("--irn_network", default="net.resnet50_clsbd", type=str)
     parser.add_argument("--irn_crop_size", default=512, type=int)
     parser.add_argument("--irn_batch_size", required=True, type=int)
     parser.add_argument("--irn_num_epoches", default=3, type=int)
@@ -120,7 +120,7 @@ if __name__ == '__main__':
     if args.train_irn_pass is True:
         import step.train_irn
 
-        timer = pyutils.Timer('step.train_irn:')
+        timer = pyutils.Timer('step.train_clsbd:')
         step.train_irn.run(args)
 
     if args.make_ins_seg_pass is True:

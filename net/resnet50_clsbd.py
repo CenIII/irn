@@ -8,7 +8,7 @@ from net.modules import ClsbdCRF
 default_conf = {
     'filter_size': 11,
     'blur': 4,
-    'merge': True,
+    'merge': False,
     'norm': 'none',
     'weight': 'vector',
     "unary_weight": 1,
@@ -40,9 +40,9 @@ default_conf = {
 
 class Net(nn.Module):
 
-    def __init__(self):
+    def __init__(self, cam_net):
         super(Net, self).__init__()
-
+        self.cam_net = cam_net
         # backbone
         self.resnet50 = resnet50.resnet50(pretrained=True, strides=[2, 2, 2, 1])
 
@@ -104,8 +104,21 @@ class Net(nn.Module):
         edge_out = edge_up
         return edge_out
 
-    def forward(self, x, unary):
+    def make_unary(self, unary_raw, label):
+        # TODO: implement this. 
+        import pdb;pdb.set_trace()
+        # unary_raw [N, 21, W, H]
+        # 1. rescale
+        strided_cam = F.interpolate(torch.unsqueeze(unary_raw, 0), 4, mode='bilinear', align_corners=False)[0]
+        # 2. add background
+        # 3. mask
+        unary = strided_cam*label
+        
+        return unary 
 
+    def forward(self, x, label):
+        unary_raw = self.cam_net(x)
+        unary = self.make_unary(unary_raw, label)
         clsbd = self.infer_clsbd(x)
         clsbd = torch.sigmoid(clsbd)
 
