@@ -5,6 +5,7 @@ from torch.utils.data import Dataset
 import os.path
 import imageio
 from misc import imutils
+import torch.nn.functional as F
 
 IMG_FOLDER_NAME = "JPEGImages"
 ANNOT_FOLDER_NAME = "Annotations"
@@ -250,8 +251,11 @@ class VOC12SegmentationDataset(Dataset):
             label = imutils.top_left_crop(label, self.crop_size, 255)
 
         img = imutils.HWC_to_CHW(img)
+        
+        cls_label = torch.from_numpy(self.label_list[idx])
+        cls_label = F.pad(input=cls_label, pad=(1, 0), mode='constant', value=0)
 
-        return {'name': name, 'img': img, 'label': label, 'cls_label': torch.from_numpy(self.label_list[idx])}
+        return {'name': name, 'img': img, 'label': label, 'cls_label': cls_label}
 
 class VOC12AffinityDataset(VOC12SegmentationDataset):
     def __init__(self, img_name_list_path, label_dir, crop_size, voc12_root,

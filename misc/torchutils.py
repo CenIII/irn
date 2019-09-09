@@ -78,3 +78,18 @@ def leaky_log(x, leaky_rate=0.2):
     hm = torch.sqrt(F.relu(x)) #torch.log(1 + F.relu(x))
     hm_lky = hm - leaky_rate * F.relu(-x)
     return hm_lky
+
+class ImageDenorm():
+    def __init__(self, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
+        self.mean = mean
+        self.std = std
+
+    def __call__(self, img):
+        imgarr = np.asarray(img)
+        proc_img = np.empty_like(imgarr, np.float32)
+
+        proc_img[..., 0] = (imgarr[..., 0] * self.std[0] + self.mean[0]) * 255.
+        proc_img[..., 1] = (imgarr[..., 1] * self.std[1] + self.mean[1]) * 255.
+        proc_img[..., 2] = (imgarr[..., 2] * self.std[2] + self.mean[2]) * 255.
+
+        return proc_img

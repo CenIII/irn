@@ -573,7 +573,7 @@ class ConvCRF(nn.Module):
     def inference(self, unary, num_iter=5):
         # FIXME: unary must be logits from cam layer. psi_unary = -unary and prediction = softmax(unary)
         # △ 0 Initialize: Q(i.e. prediction) and psi(i.e. psi_unary)
-        psi_unary = - unary
+        psi_unary = - F.log_softmax(unary, dim=1, _stacklevel=5) #- unary
         prediction = F.softmax(unary, dim=1)
 
         for i in range(num_iter):
