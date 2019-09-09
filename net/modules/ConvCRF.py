@@ -150,7 +150,7 @@ class ClsbdCRF(nn.Module):
 
         return
 
-    def forward(self, unary, clsbd, num_iter=5):
+    def forward(self, unary, clsbd, num_iter=3):
         """ Run a forward pass through ConvCRF.
 
         Arguments:
@@ -570,7 +570,7 @@ class ConvCRF(nn.Module):
             blur=self.blur,
             pyinn=self.pyinn)
 
-    def inference(self, unary, num_iter=5):
+    def inference(self, unary, num_iter=3):
         # FIXME: unary must be logits from cam layer. psi_unary = -unary and prediction = softmax(unary)
         # △ 0 Initialize: Q(i.e. prediction) and psi(i.e. psi_unary)
         psi_unary = - F.log_softmax(unary, dim=1, _stacklevel=5) #- unary
@@ -589,7 +589,7 @@ class ConvCRF(nn.Module):
                 prediction = - psi_unary - pos_message - neg_message
             else:
                 prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * (pos_message + neg_message)
-
+            
             # if not i == num_iter - 1 or self.final_softmax:
             #     if self.conf['softmax']:
             prediction = F.softmax(prediction, dim=1)
