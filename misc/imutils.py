@@ -18,7 +18,7 @@ def pil_resize(img, size, order):
 
 def pil_rescale(img, scale, order):
     height, width = img.shape[:2]
-    target_size = (int(np.round(height*scale)), int(np.round(width*scale)))
+    target_size = (int(np.ceil(height*scale)), int(np.ceil(width*scale)))
     return pil_resize(img, target_size, order)
 
 

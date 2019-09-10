@@ -83,7 +83,8 @@ def run(args):
 	cam.eval()
 
 	model = getattr(importlib.import_module(args.irn_network), 'Net')(cam)
-	
+	model = torchutils.reload_model(model, './exp/original_cam/sess/res50_irn.pth')
+
 	seed = 52
 	torch.manual_seed(seed)
 	torch.cuda.manual_seed(seed)
@@ -117,7 +118,7 @@ def run(args):
 	], lr=args.irn_learning_rate, weight_decay=args.irn_weight_decay, max_step=max_step)
 
 	model = torch.nn.DataParallel(model).cuda()
-	model.train()
+	model.eval()
 
 	avg_meter = pyutils.AverageMeter()
 
@@ -127,45 +128,47 @@ def run(args):
 	cb = [None, None, None, None]
 	img_denorm = torchutils.ImageDenorm()
 
-	for ep in range(args.irn_num_epoches):
+	with torch.no_grad():
+		for ep in range(args.irn_num_epoches):
 
-		print('Epoch %d/%d' % (ep+1, args.irn_num_epoches))
+			print('Epoch %d/%d' % (ep+1, args.irn_num_epoches))
 
-		for iter, pack in enumerate(train_data_loader):
-			img = pack['img'].cuda(non_blocking=True)
-			label = pack['reduced_label'].cuda(non_blocking=True)
-			cls_label = pack['cls_label'].cuda(non_blocking=True)
-			# bg_pos_label = pack['aff_bg_pos_label'].cuda(non_blocking=True)
-			# fg_pos_label = pack['aff_fg_pos_label'].cuda(non_blocking=True)
-			# neg_label = pack['aff_neg_label'].cuda(non_blocking=True)
+			for iter, pack in enumerate(train_data_loader):
+				img = pack['img'].cuda(non_blocking=True)
+				label = pack['reduced_label'].cuda(non_blocking=True)
+				cls_label = pack['cls_label'].cuda(non_blocking=True)
+				# bg_pos_label = pack['aff_bg_pos_label'].cuda(non_blocking=True)
+				# fg_pos_label = pack['aff_fg_pos_label'].cuda(non_blocking=True)
+				# neg_label = pack['aff_neg_label'].cuda(non_blocking=True)
 
-			pred, hms = model(img, label.clone())
+				pred, hms = model(img, label.clone())
 
-			# visualization
-			if (optimizer.global_step-1)%10 == 0 and args.cam_visualize_train:
-				visualize(img, model.module, hms, cls_label, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir)
-				visualize_all_classes(hms, cls_label, optimizer.global_step-1, args.vis_out_dir, origin=0, descr='unary')
-				visualize_all_classes(hms, cls_label, optimizer.global_step-1, args.vis_out_dir, origin=2, descr='convcrf')
-			# TODO: masked pixel cross-entropy loss compute. 
-			loss = compute_loss(crit, pred, label)
-			avg_meter.add({'loss': loss})
+				# visualization
+				if (optimizer.global_step-1)%4 == 0 and args.cam_visualize_train:
+					visualize(img, model.module, hms, cls_label, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir)
+					visualize_all_classes(hms, cls_label, optimizer.global_step-1, args.vis_out_dir, origin=0, descr='unary')
+					visualize_all_classes(hms, cls_label, optimizer.global_step-1, args.vis_out_dir, origin=2, descr='convcrf')
+				# TODO: masked pixel cross-entropy loss compute. 
+				# loss = compute_loss(crit, pred, label)
+				# avg_meter.add({'loss': loss})
 
-			# total_loss = (pos_aff_loss + neg_aff_loss)/2 + (dp_fg_loss + dp_bg_loss)/2
+				# total_loss = (pos_aff_loss + neg_aff_loss)/2 + (dp_fg_loss + dp_bg_loss)/2
 
-			optimizer.zero_grad()
-			loss.backward()
-			optimizer.step()
+				# optimizer.zero_grad()
+				# loss.backward()
+				# optimizer.step()
+				optimizer.global_step += 1
 
-			if (optimizer.global_step-1)%100 == 0:
-				timer.update_progress(optimizer.global_step / max_step)
+				if (optimizer.global_step-1)%100 == 0:
+					timer.update_progress(optimizer.global_step / max_step)
 
-				print('step:%5d/%5d' % (optimizer.global_step - 1, max_step),
-					  'loss:%.4f' % (avg_meter.pop('loss')),
-					  'imps:%.1f' % ((iter+1) * args.irn_batch_size / timer.get_stage_elapsed()),
-					  'lr: %.4f' % (optimizer.param_groups[0]['lr']),
-					  'etc:%s' % (timer.str_estimated_complete()), flush=True)
-		else:
-			timer.reset_stage()
+					print('step:%5d/%5d' % (optimizer.global_step - 1, max_step),
+						# 'loss:%.4f' % (avg_meter.pop('loss')),
+						'imps:%.1f' % ((iter+1) * args.irn_batch_size / timer.get_stage_elapsed()),
+						'lr: %.4f' % (optimizer.param_groups[0]['lr']),
+						'etc:%s' % (timer.str_estimated_complete()), flush=True)
+			else:
+				timer.reset_stage()
 
-	torch.save(model.state_dict(), args.irn_weights_name)
+	# torch.save(model.state_dict(), args.irn_weights_name)
 	torch.cuda.empty_cache()

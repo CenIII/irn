@@ -16,58 +16,68 @@ cudnn.enabled = True
 
 def _work(process_id, model, dataset, args):
 
-    n_gpus = torch.cuda.device_count()
-    databin = dataset[process_id]
-    data_loader = DataLoader(databin,
-                             shuffle=False, num_workers=args.num_workers // n_gpus, pin_memory=False)
+	n_gpus = torch.cuda.device_count()
+	databin = dataset[process_id]
+	data_loader = DataLoader(databin,
+							 shuffle=False, num_workers=args.num_workers // n_gpus, pin_memory=False)
 
-    with torch.no_grad(), cuda.device(process_id):
+	with torch.no_grad(), cuda.device(process_id):
 
-        model.cuda()
+		model.cuda()
 
-        for iter, pack in enumerate(data_loader):
-            img_name = voc12.dataloader.decode_int_filename(pack['name'][0])
-            orig_img_size = np.asarray(pack['size'])
+		for iter, pack in enumerate(data_loader):
+			img_name = voc12.dataloader.decode_int_filename(pack['name'][0])
+			orig_img_size = np.asarray(pack['size'])
 
-            edge, dp = model(pack['img'][0].cuda(non_blocking=True))
+			# edge, dp = model(pack['img'][0].cuda(non_blocking=True))
+			import pdb;pdb.set_trace()
+			rw = model(pack['img'][0].cuda(non_blocking=True), pack['seg_label'].cuda(non_blocking=True))
 
-            cam_dict = np.load(args.cam_out_dir + '/' + img_name + '.npy', allow_pickle=True).item()
+			cam_dict = np.load(args.cam_out_dir + '/' + img_name + '.npy', allow_pickle=True).item()
 
-            cams = cam_dict['cam']
-            keys = np.pad(cam_dict['keys'] + 1, (1, 0), mode='constant')
+			# cams = cam_dict['cam']
+			keys = np.pad(cam_dict['keys'] + 1, (1, 0), mode='constant')
 
-            cam_downsized_values = cams.cuda()
+			# cam_downsized_values = cams.cuda()
 
-            rw = indexing.propagate_to_edge(cam_downsized_values, edge, beta=args.beta, exp_times=args.exp_times, radius=5)
+			# rw = indexing.propagate_to_edge(cam_downsized_values, edge, beta=args.beta, exp_times=args.exp_times, radius=5)
+			rw = rw[:,keys]
+			rw_up = F.interpolate(rw, scale_factor=4, mode='bilinear', align_corners=False)[0, :, :orig_img_size[0], :orig_img_size[1]]
+			rw_up = rw_up / torch.max(rw_up)
 
-            rw_up = F.interpolate(rw, scale_factor=4, mode='bilinear', align_corners=False)[..., 0, :orig_img_size[0], :orig_img_size[1]]
-            rw_up = rw_up / torch.max(rw_up)
+			rw_up_bg = F.pad(rw_up[1:], (0, 0, 0, 0, 1, 0), value=args.sem_seg_bg_thres)
+			rw_pred = torch.argmax(rw_up_bg, dim=0).cpu().numpy()
 
-            rw_up_bg = F.pad(rw_up, (0, 0, 0, 0, 1, 0), value=args.sem_seg_bg_thres)
-            rw_pred = torch.argmax(rw_up_bg, dim=0).cpu().numpy()
+			rw_pred = keys[rw_pred]
 
-            rw_pred = keys[rw_pred]
+			imageio.imsave(os.path.join(args.sem_seg_out_dir, img_name + '.png'), rw_pred.astype(np.uint8))
 
-            imageio.imsave(os.path.join(args.sem_seg_out_dir, img_name + '.png'), rw_pred.astype(np.uint8))
-
-            if process_id == n_gpus - 1 and iter % (len(databin) // 20) == 0:
-                print("%d " % ((5*iter+1)//(len(databin) // 20)), end='')
+			if process_id == n_gpus - 1 and iter % (len(databin) // 20) == 0:
+				print("%d " % ((5*iter+1)//(len(databin) // 20)), end='')
 
 
 def run(args):
-    model = getattr(importlib.import_module(args.irn_network), 'EdgeDisplacement')()
-    model.load_state_dict(torch.load(args.irn_weights_name), strict=False)
-    model.eval()
+	# model = getattr(importlib.import_module(args.irn_network), 'EdgeDisplacement')()
+	cam = getattr(importlib.import_module(args.cam_network), 'Net')()
+	cam.load_state_dict(torch.load(args.cam_weights_name + '.pth'), strict=True)
+	cam.eval()
 
-    n_gpus = torch.cuda.device_count()
+	model = getattr(importlib.import_module(args.irn_network), 'EdgeDisplacement')(cam)
+	model = torchutils.reload_model(model, './exp/original_cam/sess/res50_irn.pth')
 
-    dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.infer_list,
-                                                             voc12_root=args.voc12_root,
-                                                             scales=(1.0,))
-    dataset = torchutils.split_dataset(dataset, n_gpus)
+	# model.load_state_dict(torch.load(args.irn_weights_name), strict=False)
+	model.eval()
 
-    print("[", end='')
-    multiprocessing.spawn(_work, nprocs=n_gpus, args=(model, dataset, args), join=True)
-    print("]")
+	n_gpus = torch.cuda.device_count()
 
-    torch.cuda.empty_cache()
+	dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.infer_list,
+															 label_dir=args.ir_label_out_dir,
+															 voc12_root=args.voc12_root,
+															 scales=(1.0,))
+	dataset = torchutils.split_dataset(dataset, n_gpus)
+
+	# print("[", end='')
+	# multiprocessing.spawn(_work, nprocs=n_gpus, args=(model, dataset, args), join=True)
+	# print("]")
+	_work(0,model,dataset,args)
+	torch.cuda.empty_cache()

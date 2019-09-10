@@ -146,11 +146,13 @@ class ClsbdCRF(nn.Module):
             convcomp=conf['convcomp'], weight=weight,
             final_softmax=conf['final_softmax'],
             unary_weight=conf['unary_weight'],
+            pos_weight=conf['pos_weight'],
+            neg_weight=conf['neg_weight'],
             pyinn=conf['pyinn'])
 
         return
 
-    def forward(self, unary, clsbd, num_iter=3):
+    def forward(self, unary, clsbd, num_iter=5):
         """ Run a forward pass through ConvCRF.
 
         Arguments:
@@ -171,10 +173,10 @@ class ClsbdCRF(nn.Module):
         
         pos_feats = self.create_position_feats(clsbd.shape[-2:], sdims=self.pos_sdims, bs=bs)
 
-        compats = [self.col_compat,self.pos_compat]
-        is_clsbd_list = [True, False]
+        compats = [self.col_compat]#,self.pos_compat]
+        is_clsbd_list = [True]#, False]
         
-        self.CRF.add_pairwise_energies([clsbd, pos_feats],
+        self.CRF.add_pairwise_energies([clsbd],#, pos_feats],
                                        compats, is_clsbd_list, conf['merge'])
 
         prediction = self.CRF.inference(unary, num_iter=num_iter)
@@ -411,7 +413,6 @@ class MessagePassingCol():
             assert(npixels[1] == input.shape[3])
         else:
             npixels = self.npixels
-
         if self.verbose:
             show_memusage(name="Init")
 
@@ -459,10 +460,8 @@ class MessagePassingCol():
                 message = torch.nn.functional.upsample(message,
                                                        scale_factor=self.blur,
                                                        mode='bilinear')
-
             message = message[:, :, pad_0:pad_0 + in_0, pad_1:in_1 + pad_1]
             message = message.contiguous()
-
             message = message.view(shape)
             assert(message.shape == shape)
 
@@ -499,6 +498,8 @@ class ConvCRF(nn.Module):
                  verbose=False, trainable=False,
                  convcomp=False, weight=None,
                  final_softmax=True, unary_weight=10,
+                 pos_weight=1,
+                 neg_weight=1,
                  pyinn=False):
 
         super(ConvCRF, self).__init__()
@@ -519,6 +520,9 @@ class ConvCRF(nn.Module):
         self.conf = conf
 
         self.unary_weight = unary_weight
+
+        self.pos_weight = pos_weight
+        self.neg_weight = neg_weight
 
         if self.use_gpu:
             if not torch.cuda.is_available():
@@ -585,11 +589,12 @@ class ConvCRF(nn.Module):
             pos_message = messages['pos']
 
             # △ 3 Local Update (and normalize)
+            # import pdb;pdb.set_trace()
             if self.weight is None:
                 prediction = - psi_unary - pos_message - neg_message
             else:
-                prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * (pos_message + neg_message)
-            
+                prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * (self.pos_weight*pos_message + self.neg_weight*neg_message)
+
             # if not i == num_iter - 1 or self.final_softmax:
             #     if self.conf['softmax']:
             prediction = F.softmax(prediction, dim=1)

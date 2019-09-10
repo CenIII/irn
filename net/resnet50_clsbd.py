@@ -13,6 +13,8 @@ default_conf = {
     'weight': 'vector',
     "unary_weight": 1,
     "weight_init": 0.2,
+    "pos_weight":2.,
+    "neg_weight":1.,
 
     'trainable': False,
     'convcomp': True,
@@ -109,7 +111,7 @@ class Net(nn.Module):
         # 1. rescale
         unary_raw = F.interpolate(unary_raw, label.shape[-2:], mode='bilinear', align_corners=False)#[0] #torch.unsqueeze(unary_raw, 0)
         # 2. add background
-        unary_raw = F.pad(unary_raw, (0, 0, 0, 0, 1, 1, 0, 0), mode='constant',value=10.)
+        unary_raw = F.pad(unary_raw, (0, 0, 0, 0, 1, 1, 0, 0), mode='constant',value=3.)
         # 3. create and apply mask
         label[label==255.] = 21
         label = label.unsqueeze(1)
@@ -122,9 +124,9 @@ class Net(nn.Module):
         unary_raw = self.cam_net(x)
         unary_raw = F.relu(unary_raw).detach()
         unary = self.make_unary(unary_raw, label)
-        clsbd = self.infer_clsbd(x)
+        clsbd = self.infer_clsbd(x)[...,:unary.shape[-2],:unary.shape[-1]]
         clsbd = torch.sigmoid(clsbd)
-        pred = self.convcrf(unary, clsbd)
+        pred = self.convcrf(unary, clsbd, num_iter=5)
         hms = self.save_hm(unary,clsbd.repeat(1,21,1,1),pred)
         return pred, hms
 
@@ -152,14 +154,24 @@ class Net(nn.Module):
 
 class EdgeDisplacement(Net):
 
-    def __init__(self):
-        super(EdgeDisplacement, self).__init__()
+    def __init__(self,cam):
+        super(EdgeDisplacement, self).__init__(cam)
 
-    def forward(self, x, out_settings=None):
-        edge_out = super().forward(x)
+    def forward(self, x, label, out_settings=None):
+        # edge_out, _ = super().forward(x, label)
+        def flip_add(inp,keepdim=True):
+            return inp[0:1]+inp[1:2].flip(-1)
+        unary_raw = self.cam_net(x)
+        unary_raw = F.relu(flip_add(unary_raw)).detach()
+        unary = self.make_unary(unary_raw, label)
+        clsbd = self.infer_clsbd(x)[...,:unary.shape[-2],:unary.shape[-1]]
+        clsbd = torch.sigmoid(flip_add(clsbd)/2)
+        pred = self.convcrf(unary, clsbd, num_iter=5)
+        # hms = self.save_hm(unary,clsbd.repeat(1,21,1,1),pred)
+        return pred#, hms
 
-        edge_out = torch.sigmoid(edge_out[0]/2 + edge_out[1].flip(-1)/2)
+        # edge_out = torch.sigmoid(edge_out[0]/2 + edge_out[1].flip(-1)/2)
 
-        return edge_out
+        # return edge_out
 
 
