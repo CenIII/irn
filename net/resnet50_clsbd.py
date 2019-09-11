@@ -13,7 +13,7 @@ default_conf = {
     'weight': 'vector',
     "unary_weight": 1,
     "weight_init": 0.3,
-    "pos_weight":3.,
+    "pos_weight":4.,
     "neg_weight":1.,
 
     'trainable': False,
@@ -23,8 +23,8 @@ default_conf = {
     'final_softmax': False,
 
     'pos_feats': {
-        'sdims': 3,
-        'compat': 3,
+        'sdims': 8,
+        'compat': 12,
     },
     'col_feats': {
         # 'sdims': 80,
@@ -119,7 +119,10 @@ class Net(nn.Module):
         mask = mask.scatter_(1,label.type(torch.cuda.LongTensor),1)
         unary = (unary_raw * mask)[:,:-1]
         unary[unary>0.] = 150.
-        unary[:,0] /= 100.
+        tmp = mask[:,:-1].sum(dim=2,keepdim=True).sum(dim=3,keepdim=True) # [N,21,1,1]
+        tmp[tmp>0.] = 1.
+        unary += tmp
+        unary[:,0] *= 0.5
         return unary 
 
     def forward(self, x, label):
@@ -164,11 +167,11 @@ class EdgeDisplacement(Net):
         def flip_add(inp,keepdim=True):
             return inp[0:1]+inp[1:2].flip(-1)
         unary_raw = self.cam_net(x)
-        unary_raw = F.relu(flip_add(unary_raw)).detach()
+        unary_raw = flip_add(F.relu(unary_raw)).detach()
         unary = self.make_unary(unary_raw, label)
         clsbd = self.infer_clsbd(x)[...,:unary.shape[-2],:unary.shape[-1]]
         clsbd = torch.sigmoid(flip_add(clsbd)/2)
-        pred = self.convcrf(unary, clsbd, num_iter=8)
+        pred = self.convcrf(unary, clsbd, num_iter=6)
         # hms = self.save_hm(unary,clsbd.repeat(1,21,1,1),pred)
         return pred#, hms
 

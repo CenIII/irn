@@ -173,10 +173,10 @@ class ClsbdCRF(nn.Module):
         
         pos_feats = self.create_position_feats(clsbd.shape[-2:], sdims=self.pos_sdims, bs=bs)
 
-        compats = [self.col_compat]#,self.pos_compat]
-        is_clsbd_list = [True]#, False]
+        compats = [self.col_compat,self.pos_compat]
+        is_clsbd_list = [True, False]
         
-        self.CRF.add_pairwise_energies([clsbd],#, pos_feats],
+        self.CRF.add_pairwise_energies([clsbd, pos_feats],
                                        compats, is_clsbd_list, conf['merge'])
 
         prediction = self.CRF.inference(unary, num_iter=num_iter)
