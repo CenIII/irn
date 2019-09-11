@@ -12,7 +12,7 @@ default_conf = {
     'norm': 'none',
     'weight': 'vector',
     "unary_weight": 1,
-    "weight_init": 0.3,
+    "weight_init": 0.5,
     "pos_weight":4.,
     "neg_weight":1.,
 
@@ -24,7 +24,7 @@ default_conf = {
 
     'pos_feats': {
         'sdims': 8,
-        'compat': 12,
+        'compat': 15,
     },
     'col_feats': {
         # 'sdims': 80,
@@ -111,18 +111,18 @@ class Net(nn.Module):
         # 1. rescale
         unary_raw = F.interpolate(unary_raw, label.shape[-2:], mode='bilinear', align_corners=False)#[0] #torch.unsqueeze(unary_raw, 0)
         # 2. add background
-        unary_raw = F.pad(unary_raw, (0, 0, 0, 0, 1, 1, 0, 0), mode='constant',value=4.)
+        unary_raw = F.pad(unary_raw, (0, 0, 0, 0, 1, 1, 0, 0), mode='constant',value=1.)
         # 3. create and apply mask
         label[label==255.] = 21
         label = label.unsqueeze(1)
         mask = torch.zeros_like(unary_raw).cuda()
-        mask = mask.scatter_(1,label.type(torch.cuda.LongTensor),1)
+        mask = mask.scatter_(1,label.type(torch.cuda.LongTensor),1.)
         unary = (unary_raw * mask)[:,:-1]
-        unary[unary>0.] = 150.
+        # unary[unary>0.] = 100.
         tmp = mask[:,:-1].sum(dim=2,keepdim=True).sum(dim=3,keepdim=True) # [N,21,1,1]
         tmp[tmp>0.] = 1.
         unary += tmp
-        unary[:,0] *= 0.5
+        # unary[:,0] *= 0.5
         return unary 
 
     def forward(self, x, label):
