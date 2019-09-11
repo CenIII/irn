@@ -38,6 +38,7 @@ if __name__ == '__main__':
     parser.add_argument("--val_list", default="voc12/val.txt", type=str)
     parser.add_argument("--infer_list", default="voc12/train.txt", type=str)
     parser.add_argument("--chainer_eval_set", default="train", type=str)
+    parser.add_argument("--quick_list", default="voc12/quick.txt", type=str)
 
     # Class Activation Map
     parser.add_argument("--cam_network", default="net.resnet50_cam", type=str)

@@ -11,26 +11,27 @@ import imageio
 
 import voc12.dataloader
 from misc import torchutils, indexing
+import tqdm 
 
 cudnn.enabled = True
 
 def _work(process_id, model, dataset, args):
 
 	n_gpus = torch.cuda.device_count()
-	databin = dataset[process_id]
+	databin = dataset#[process_id]
 	data_loader = DataLoader(databin,
 							 shuffle=False, num_workers=args.num_workers // n_gpus, pin_memory=False)
 
 	with torch.no_grad(), cuda.device(process_id):
 
 		model.cuda()
-
-		for iter, pack in enumerate(data_loader):
+		qdar = tqdm.tqdm(enumerate(data_loader),total=len(data_loader),ascii=True,position=process_id)
+		for iter, pack in qdar:
 			img_name = voc12.dataloader.decode_int_filename(pack['name'][0])
 			orig_img_size = np.asarray(pack['size'])
 
 			# edge, dp = model(pack['img'][0].cuda(non_blocking=True))
-			import pdb;pdb.set_trace()
+			# import pdb;pdb.set_trace()
 			rw = model(pack['img'][0].cuda(non_blocking=True), pack['seg_label'].cuda(non_blocking=True))
 
 			cam_dict = np.load(args.cam_out_dir + '/' + img_name + '.npy', allow_pickle=True).item()
@@ -70,11 +71,11 @@ def run(args):
 
 	n_gpus = torch.cuda.device_count()
 
-	dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.infer_list,
+	dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.quick_list,
 															 label_dir=args.ir_label_out_dir,
 															 voc12_root=args.voc12_root,
 															 scales=(1.0,))
-	dataset = torchutils.split_dataset(dataset, n_gpus)
+	# dataset = torchutils.split_dataset(dataset, n_gpus)
 
 	# print("[", end='')
 	# multiprocessing.spawn(_work, nprocs=n_gpus, args=(model, dataset, args), join=True)

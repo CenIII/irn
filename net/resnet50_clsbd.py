@@ -13,7 +13,7 @@ default_conf = {
     'weight': 'vector',
     "unary_weight": 1,
     "weight_init": 0.2,
-    "pos_weight":2.,
+    "pos_weight":3.,
     "neg_weight":1.,
 
     'trainable': False,
@@ -111,13 +111,15 @@ class Net(nn.Module):
         # 1. rescale
         unary_raw = F.interpolate(unary_raw, label.shape[-2:], mode='bilinear', align_corners=False)#[0] #torch.unsqueeze(unary_raw, 0)
         # 2. add background
-        unary_raw = F.pad(unary_raw, (0, 0, 0, 0, 1, 1, 0, 0), mode='constant',value=3.)
+        unary_raw = F.pad(unary_raw, (0, 0, 0, 0, 1, 1, 0, 0), mode='constant',value=4.)
         # 3. create and apply mask
         label[label==255.] = 21
         label = label.unsqueeze(1)
         mask = torch.zeros_like(unary_raw).cuda()
         mask = mask.scatter_(1,label.type(torch.cuda.LongTensor),1)
         unary = (unary_raw * mask)[:,:-1]
+        unary[unary>0.] = 150.
+        unary[:,0] /= 100.
         return unary 
 
     def forward(self, x, label):
