@@ -12,7 +12,7 @@ default_conf = {
     'norm': 'none',
     'weight': 'vector',
     "unary_weight": 1,
-    "weight_init": 0.2,
+    "weight_init": 0.3,
     "pos_weight":3.,
     "neg_weight":1.,
 
@@ -128,7 +128,7 @@ class Net(nn.Module):
         unary = self.make_unary(unary_raw, label)
         clsbd = self.infer_clsbd(x)[...,:unary.shape[-2],:unary.shape[-1]]
         clsbd = torch.sigmoid(clsbd)
-        pred = self.convcrf(unary, clsbd, num_iter=5)
+        pred = self.convcrf(unary, clsbd, num_iter=1)
         hms = self.save_hm(unary,clsbd.repeat(1,21,1,1),pred)
         return pred, hms
 
@@ -168,7 +168,7 @@ class EdgeDisplacement(Net):
         unary = self.make_unary(unary_raw, label)
         clsbd = self.infer_clsbd(x)[...,:unary.shape[-2],:unary.shape[-1]]
         clsbd = torch.sigmoid(flip_add(clsbd)/2)
-        pred = self.convcrf(unary, clsbd, num_iter=5)
+        pred = self.convcrf(unary, clsbd, num_iter=8)
         # hms = self.save_hm(unary,clsbd.repeat(1,21,1,1),pred)
         return pred#, hms
 
