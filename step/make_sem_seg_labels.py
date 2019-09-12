@@ -15,10 +15,13 @@ import tqdm
 
 cudnn.enabled = True
 
-def _work(process_id, model, dataset, args):
+def _work(process_id, model, dataset, args, quick=False):
 
 	n_gpus = torch.cuda.device_count()
-	databin = dataset#[process_id]
+	if quick:
+		databin = dataset#[process_id]
+	else:
+		databin = dataset[process_id]
 	data_loader = DataLoader(databin,
 							 shuffle=False, num_workers=args.num_workers // n_gpus, pin_memory=False)
 
@@ -52,7 +55,6 @@ def _work(process_id, model, dataset, args):
 			rw_pred = keys[rw_pred]
 
 			imageio.imsave(os.path.join(args.sem_seg_out_dir, img_name + '.png'), rw_pred.astype(np.uint8))
-
 			if process_id == n_gpus - 1 and iter % (len(databin) // 20) == 0:
 				print("%d " % ((5*iter+1)//(len(databin) // 20)), end='')
 
@@ -71,14 +73,24 @@ def run(args):
 
 	n_gpus = torch.cuda.device_count()
 
-	dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.quick_list,
+	
+	if args.quick_make_sem:
+		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.quick_list,
 															 label_dir=args.ir_label_out_dir,
 															 voc12_root=args.voc12_root,
 															 scales=(1.0,))
-	# dataset = torchutils.split_dataset(dataset, n_gpus)
+		_work(0,model,dataset,args,quick=True)
+	else:
+		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.infer_list,
+															 label_dir=args.ir_label_out_dir,
+															 voc12_root=args.voc12_root,
+															 scales=(1.0,))
+		dataset = torchutils.split_dataset(dataset, n_gpus)
 
-	# print("[", end='')
-	# multiprocessing.spawn(_work, nprocs=n_gpus, args=(model, dataset, args), join=True)
-	# print("]")
-	_work(0,model,dataset,args)
+		# print("[", end='')
+		multiprocessing.spawn(_work, nprocs=n_gpus, args=(model, dataset, args), join=True)
+		# print("]")
+				
+	
+	
 	torch.cuda.empty_cache()

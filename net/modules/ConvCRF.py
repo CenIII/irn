@@ -585,11 +585,11 @@ class ConvCRF(nn.Module):
             messages = self.kernel.compute(prediction)
 
             # △ 2 Compatibility transform
+            # import pdb;pdb.set_trace()
             neg_message = self.neg_comp(messages['neg'])
             pos_message = messages['pos']
 
             # △ 3 Local Update (and normalize)
-            # import pdb;pdb.set_trace()
             if self.weight is None:
                 prediction = - psi_unary - pos_message - neg_message
             else:
@@ -598,6 +598,7 @@ class ConvCRF(nn.Module):
             # if not i == num_iter - 1 or self.final_softmax:
             #     if self.conf['softmax']:
             prediction = F.softmax(prediction, dim=1)
+        
         return prediction
 
 
