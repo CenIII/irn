@@ -122,7 +122,7 @@ class Net(nn.Module):
         tmp = mask[:,:-1].sum(dim=2,keepdim=True).sum(dim=3,keepdim=True) # [N,21,1,1]
         tmp[tmp>0.] = 1.
         unary += tmp
-        # unary[:,0] = 1.
+        unary[:,0] *= 0.95
         return unary 
 
     def forward(self, x, label):
