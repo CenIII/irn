@@ -152,7 +152,7 @@ class ClsbdCRF(nn.Module):
 
         return
 
-    def forward(self, unary, clsbd, num_iter=5):
+    def forward(self, unary, clsbd, label, num_iter=5):
         """ Run a forward pass through ConvCRF.
 
         Arguments:
@@ -179,7 +179,7 @@ class ClsbdCRF(nn.Module):
         self.CRF.add_pairwise_energies([clsbd, pos_feats],
                                        compats, is_clsbd_list, conf['merge'])
 
-        prediction = self.CRF.inference(unary, num_iter=num_iter)
+        prediction = self.CRF.inference(unary, label, num_iter=num_iter)
 
         self.CRF.clean_filters()
         return prediction
@@ -236,6 +236,16 @@ def _negative(dz):
     else:
         return -dz
 
+def polarness(x, label): #[1, 21, 42, 63]
+    # import pdb;pdb.set_trace()
+    keys = np.unique(label.cpu())[:-1].astype(np.int32)
+    D = len(keys) #x.shape[1]
+    x_t = x[:,keys]
+    x_t /= x_t.sum(dim=1,keepdim=True)
+    entropy = (- x_t * torch.log(x_t+1e-5)).sum(dim=1,keepdim=True)
+    pl = 1. - entropy / np.log(D)
+    # pl = 1. - x[:,0:1]
+    return pl 
 
 class MessagePassingCol():
     """ Perform the Message passing of ConvCRFs.
@@ -389,7 +399,7 @@ class MessagePassingCol():
             bs, 1, self.filter_size, self.filter_size,
             npixels[0], npixels[1])
 
-    def _compute_gaussian(self, input, gaussian, norm=None):
+    def _compute_gaussian(self, input, label, key, gaussian, norm=None):
 
         if norm is not None:
             input = input * norm
@@ -416,6 +426,10 @@ class MessagePassingCol():
         if self.verbose:
             show_memusage(name="Init")
 
+        # if key == 'pos':
+        # # polarization as 1. 
+        pl = polarness(input, label)  #[1, 1, 42, 63]
+        input = input * pl
         if self.pyinn:
             input_col = P.im2col(input, self.filter_size, 1, self.span)
         else:
@@ -437,8 +451,13 @@ class MessagePassingCol():
 
         if self.verbose:
             show_memusage(name="Im2Col")
+        
+        # if key == 'pos':
+        #     product = gaussian * input_col #* pl.unsqueeze(2).unsqueeze(3)
+        # else:
+        #     product = gaussian * input_col
+        product = gaussian * input_col / 10.
 
-        product = gaussian * input_col
         if self.verbose:
             show_memusage(name="Product")
 
@@ -470,7 +489,7 @@ class MessagePassingCol():
 
         return message
         
-    def compute(self, input):
+    def compute(self, input, label):
         # if self.merge:
         #     pred = self._compute_gaussian(input, self.gaussian)
         # else:
@@ -480,7 +499,7 @@ class MessagePassingCol():
         #         pred += self._compute_gaussian(input, gaus, norm)
         preds = {}
         for k,v in self._gaus_list.items():
-            preds[k] = self._compute_gaussian(input, v)
+            preds[k] = self._compute_gaussian(input, label, k, v)
         return preds
 
 class ConvCRF(nn.Module):
@@ -574,7 +593,7 @@ class ConvCRF(nn.Module):
             blur=self.blur,
             pyinn=self.pyinn)
 
-    def inference(self, unary, num_iter=3):
+    def inference(self, unary, label, num_iter=3):
         # FIXME: unary must be logits from cam layer. psi_unary = -unary and prediction = softmax(unary)
         # △ 0 Initialize: Q(i.e. prediction) and psi(i.e. psi_unary)
         psi_unary = - F.log_softmax(unary, dim=1, _stacklevel=5) #- unary
@@ -582,13 +601,16 @@ class ConvCRF(nn.Module):
 
         for i in range(num_iter):
             # △ 1 Message passing
-            messages = self.kernel.compute(prediction)
+            messages = self.kernel.compute(prediction, label)
 
             # △ 2 Compatibility transform
             # import pdb;pdb.set_trace()
             neg_message = self.neg_comp(messages['neg'])
             pos_message = messages['pos']
+            # import pdb;pdb.set_trace()
 
+            # pos_message[:,0] /= 1.1
+            # neg_message[:,0] *= 1.2
             # △ 3 Local Update (and normalize)
             if self.weight is None:
                 prediction = - psi_unary - pos_message - neg_message

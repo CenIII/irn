@@ -6,14 +6,14 @@ from net.modules import ClsbdCRF
 
 # Default config as proposed by Philipp Kraehenbuehl and Vladlen Koltun,
 default_conf = {
-    'filter_size': 9,
+    'filter_size': 11,
     'blur': 2,
     'merge': False,
     'norm': 'none',
     'weight': 'vector',
     "unary_weight": 1,
-    "weight_init": 0.5,
-    "pos_weight":6.,
+    "weight_init": 0.1,
+    "pos_weight":8.,
     "neg_weight":1.,
 
     'trainable': False,
@@ -24,7 +24,7 @@ default_conf = {
 
     'pos_feats': {
         'sdims': 20,
-        'compat': 20.,
+        'compat': 10.,
     },
     'col_feats': {
         # 'sdims': 80,
@@ -122,7 +122,7 @@ class Net(nn.Module):
         tmp = mask[:,:-1].sum(dim=2,keepdim=True).sum(dim=3,keepdim=True) # [N,21,1,1]
         tmp[tmp>0.] = 1.
         unary += tmp
-        unary[:,0] *= 0.95
+        unary[:,0] = 1.
         return unary 
 
     def forward(self, x, label):
@@ -131,7 +131,7 @@ class Net(nn.Module):
         unary = self.make_unary(unary_raw, label)
         clsbd = self.infer_clsbd(x)[...,:unary.shape[-2],:unary.shape[-1]]
         clsbd = torch.sigmoid(clsbd)
-        pred = self.convcrf(unary, clsbd, num_iter=1)
+        pred = self.convcrf(unary, clsbd, label, num_iter=1)
         hms = self.save_hm(unary,clsbd.repeat(1,21,1,1),pred)
         return pred, hms
 
@@ -171,7 +171,7 @@ class EdgeDisplacement(Net):
         unary = self.make_unary(unary_raw, label)
         clsbd = self.infer_clsbd(x)[...,:unary.shape[-2],:unary.shape[-1]]
         clsbd = torch.sigmoid(flip_add(clsbd)/2)
-        pred = self.convcrf(unary, clsbd, num_iter=8)
+        pred = self.convcrf(unary, clsbd, label, num_iter=101)
         # hms = self.save_hm(unary,clsbd.repeat(1,21,1,1),pred)
         return pred#, hms
 
