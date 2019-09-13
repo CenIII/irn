@@ -243,7 +243,10 @@ def polarness(x, label): #[1, 21, 42, 63]
     x_t = x[:,keys]
     x_t /= x_t.sum(dim=1,keepdim=True)
     entropy = (- x_t * torch.log(x_t+1e-5)).sum(dim=1,keepdim=True)
-    pl = 1. - entropy / np.log(D)
+    if D > 1:
+        pl = 1. - entropy / np.log(D)
+    else: 
+        pl = 1. - entropy
     # pl = 1. - x[:,0:1]
     return pl 
 
@@ -456,7 +459,7 @@ class MessagePassingCol():
         #     product = gaussian * input_col #* pl.unsqueeze(2).unsqueeze(3)
         # else:
         #     product = gaussian * input_col
-        product = gaussian * input_col / 10.
+        product = gaussian * input_col
 
         if self.verbose:
             show_memusage(name="Product")

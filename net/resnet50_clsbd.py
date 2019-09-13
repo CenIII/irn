@@ -13,7 +13,7 @@ default_conf = {
     'weight': 'vector',
     "unary_weight": 1,
     "weight_init": 0.1,
-    "pos_weight":8.,
+    "pos_weight":12.,
     "neg_weight":1.,
 
     'trainable': False,
@@ -23,15 +23,15 @@ default_conf = {
     'final_softmax': False,
 
     'pos_feats': {
-        'sdims': 20,
-        'compat': 10.,
+        'sdims': 50,
+        'compat': 1.5,
     },
     'col_feats': {
         # 'sdims': 80,
         # 'schan': 13,   # schan depend on the input scale.
         #                # use schan = 13 for images in [0, 255]
         #                # for normalized images in [-0.5, 0.5] try schan = 0.1
-        'compat': 10,
+        'compat': 1.,
         'use_bias': False
     },
     "trainable_bias": False,
@@ -118,7 +118,7 @@ class Net(nn.Module):
         mask = torch.zeros_like(unary_raw).cuda()
         mask = mask.scatter_(1,label.type(torch.cuda.LongTensor),1.)
         unary = (unary_raw * mask)[:,:-1]
-        # unary[unary>0.] = 100.
+        # unary[unary>0.] = 150.
         tmp = mask[:,:-1].sum(dim=2,keepdim=True).sum(dim=3,keepdim=True) # [N,21,1,1]
         tmp[tmp>0.] = 1.
         unary += tmp
@@ -171,7 +171,7 @@ class EdgeDisplacement(Net):
         unary = self.make_unary(unary_raw, label)
         clsbd = self.infer_clsbd(x)[...,:unary.shape[-2],:unary.shape[-1]]
         clsbd = torch.sigmoid(flip_add(clsbd)/2)
-        pred = self.convcrf(unary, clsbd, label, num_iter=101)
+        pred = self.convcrf(unary, clsbd, label, num_iter=8)
         # hms = self.save_hm(unary,clsbd.repeat(1,21,1,1),pred)
         return pred#, hms
 
