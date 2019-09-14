@@ -13,7 +13,7 @@ default_conf = {
     'weight': 'vector',
     "unary_weight": 1,
     "weight_init": 0.1,
-    "pos_weight":12.,
+    "pos_weight":15.,
     "neg_weight":1.,
 
     'trainable': False,
@@ -24,7 +24,7 @@ default_conf = {
 
     'pos_feats': {
         'sdims': 50,
-        'compat': 1.5,
+        'compat': 2,
     },
     'col_feats': {
         # 'sdims': 80,
