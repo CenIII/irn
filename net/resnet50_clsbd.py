@@ -6,7 +6,7 @@ from net.modules import ClsbdCRF
 
 # Default config as proposed by Philipp Kraehenbuehl and Vladlen Koltun,
 default_conf = {
-    'filter_size': 11,
+    'filter_size': 9,
     'blur': 2,
     'merge': False,
     'norm': 'none',
@@ -24,7 +24,7 @@ default_conf = {
 
     'pos_feats': {
         'sdims': 50,
-        'compat': 2,
+        'compat': 2.,
     },
     'col_feats': {
         # 'sdims': 80,
