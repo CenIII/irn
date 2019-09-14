@@ -106,7 +106,7 @@ class Net(nn.Module):
         edge_out = edge_up
         return edge_out
 
-    def make_unary(self, unary_raw, label):
+    def make_unary_for_infer(self, unary_raw, label):
         # unary_raw [N, 21, W, H]
         # 1. rescale
         unary_raw = F.interpolate(unary_raw, label.shape[-2:], mode='bilinear', align_corners=False)#[0] #torch.unsqueeze(unary_raw, 0)
@@ -125,10 +125,25 @@ class Net(nn.Module):
         unary[:,0] = 1.
         return unary 
 
+    def make_unary_for_train(self, unary_raw, label):
+        # unary_raw [N, 21, W, H]
+        # 1. rescale
+        unary_raw = F.interpolate(unary_raw, label.shape[-2:], mode='bilinear', align_corners=False)#[0] #torch.unsqueeze(unary_raw, 0)
+        # 2. add background
+        unary_raw = F.pad(unary_raw, (0, 0, 0, 0, 1, 1, 0, 0), mode='constant',value=1.)
+        # 3. create and apply mask
+        label[label==255.] = 21
+        label = label.unsqueeze(1)
+        mask = torch.zeros_like(unary_raw).cuda()
+        mask = mask.scatter_(1,label.type(torch.cuda.LongTensor),1.)
+        unary = (unary_raw * mask)[:,:-1]
+        unary[unary>0.] = 100.
+        return unary 
+
     def forward(self, x, label):
         unary_raw = self.cam_net(x)
         unary_raw = F.relu(unary_raw).detach()
-        unary = self.make_unary(unary_raw, label)
+        unary = self.make_unary_for_train(unary_raw, label)
         clsbd = self.infer_clsbd(x)[...,:unary.shape[-2],:unary.shape[-1]]
         clsbd = torch.sigmoid(clsbd)
         pred = self.convcrf(unary, clsbd, label, num_iter=1)
@@ -168,7 +183,7 @@ class EdgeDisplacement(Net):
             return inp[0:1]+inp[1:2].flip(-1)
         unary_raw = self.cam_net(x)
         unary_raw = flip_add(F.relu(unary_raw)).detach()
-        unary = self.make_unary(unary_raw, label)
+        unary = self.make_unary_for_infer(unary_raw, label)
         clsbd = self.infer_clsbd(x)[...,:unary.shape[-2],:unary.shape[-1]]
         clsbd = torch.sigmoid(flip_add(clsbd)/2)
         pred = self.convcrf(unary, clsbd, label, num_iter=8)
