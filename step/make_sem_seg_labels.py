@@ -47,9 +47,10 @@ def _work(process_id, model, dataset, args, quick=False):
 			# rw = indexing.propagate_to_edge(cam_downsized_values, edge, beta=args.beta, exp_times=args.exp_times, radius=5)
 			rw = rw[:,keys]
 			rw_up = F.interpolate(rw, scale_factor=4, mode='bilinear', align_corners=False)[0, :, :orig_img_size[0], :orig_img_size[1]]
-			rw_up = rw_up / torch.max(rw_up)
+			# import pdb;pdb.set_trace()
+			rw_up = rw_up / rw_up.max(dim=1,keepdim=True)[0].max(dim=2,keepdim=True)[0] #torch.max(rw_up)
 
-			rw_up_bg = F.pad(rw_up[1:], (0, 0, 0, 0, 1, 0), value=0.9)#args.sem_seg_bg_thres
+			rw_up_bg = F.pad(rw_up[1:], (0, 0, 0, 0, 1, 0), value=0.8)#args.sem_seg_bg_thres
 			rw_pred = torch.argmax(rw_up_bg, dim=0).cpu().numpy()
 
 			rw_pred = keys[rw_pred]

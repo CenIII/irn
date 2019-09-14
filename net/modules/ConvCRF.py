@@ -431,8 +431,8 @@ class MessagePassingCol():
 
         # if key == 'pos':
         # # polarization as 1. 
-        pl = polarness(input, label)  #[1, 1, 42, 63]
-        input = input * pl
+        # pl = polarness(input, label)  #[1, 1, 42, 63]
+        # input = input * pl
         if self.pyinn:
             input_col = P.im2col(input, self.filter_size, 1, self.span)
         else:
@@ -599,9 +599,8 @@ class ConvCRF(nn.Module):
     def inference(self, unary, label, num_iter=3):
         # FIXME: unary must be logits from cam layer. psi_unary = -unary and prediction = softmax(unary)
         # △ 0 Initialize: Q(i.e. prediction) and psi(i.e. psi_unary)
-        psi_unary = - F.log_softmax(unary, dim=1, _stacklevel=5) #- unary
-        prediction = F.softmax(unary, dim=1)
-
+        psi_unary = - unary #- F.log_softmax(unary, dim=1, _stacklevel=5) #- unary
+        prediction = unary #F.softmax(unary, dim=1)
         for i in range(num_iter):
             # △ 1 Message passing
             messages = self.kernel.compute(prediction, label)
@@ -619,10 +618,10 @@ class ConvCRF(nn.Module):
                 prediction = - psi_unary - pos_message - neg_message
             else:
                 prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * (self.pos_weight*pos_message + self.neg_weight*neg_message)
-
+        # import pdb;pdb.set_trace()
             # if not i == num_iter - 1 or self.final_softmax:
             #     if self.conf['softmax']:
-            prediction = F.softmax(prediction, dim=1)
+        prediction = F.softmax(prediction, dim=1)
         
         return prediction
 
