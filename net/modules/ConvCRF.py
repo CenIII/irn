@@ -627,22 +627,19 @@ class ConvCRF(nn.Module):
             # △ 3 Local Update (and normalize)
             
             pl_pred = (prediction*pl)[:,:,None,None]
-            # import pdb;pdb.set_trace()
-            pos_norm = (pl_pred*input_col).view(N,C,-1).sum(dim=2)[:,:,None,None]#+1e-3
-            pos_norm[:,1:] = pos_norm[:,1:].sum(dim=1,keepdim=True).detach()
+            pos_norm = (pl_pred*input_col).view(N,C,-1).sum(dim=2)[:,:,None,None]
+            pos_norm[:,1:] = pos_norm[:,1:].sum(dim=1,keepdim=True)
             pos_norm *= 2.
-            neg_input_col = self.neg_comp(input_col.view(N,C,-1,1)).view(input_col.shape).detach()
-            neg_norm = (pl_pred*neg_input_col).view(N,-1).sum(dim=1)[:,None,None,None].detach()#+1e-3
-            # neg_norm2 = (pl_pred*neg_input_col).view(N,C,-1).sum(dim=2)[:,:,None,None]*21#+1e-3
+            pos_norm = (pos_norm+1.).detach()
+            neg_input_col = self.neg_comp(input_col.view(N,C,-1,1)).view(input_col.shape)
+            neg_norm = ((pl_pred*neg_input_col).view(N,-1).sum(dim=1)[:,None,None,None]+1.).detach()
             # if self.weight is None:
             #     prediction = - psi_unary - pos_message - neg_message
             # else:
             prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * (self.pos_weight*pos_message/pos_norm + self.neg_weight*neg_message/neg_norm)
-            # import pdb;pdb.set_trace()
             # if not i == num_iter - 1 or self.final_softmax:
             #     if self.conf['softmax']:
             # prediction = F.softmax(prediction, dim=1)
-        # import pdb;pdb.set_trace()
         loss = - (prediction*pl_pred.squeeze()).view(N,-1).sum(dim=1)
         # prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * (self.pos_weight*pos_message/pos_norm + self.neg_weight*neg_message/neg_norm2)
         return prediction, loss

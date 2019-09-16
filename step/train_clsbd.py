@@ -177,7 +177,7 @@ def run(args):
 			
 				optimizer.zero_grad()
 				loss.backward()
-				grad_norm = get_grad_norm(param_groups)
+				# grad_norm = get_grad_norm(param_groups)
 				# clip_grad_norm_(model.parameters(), 2.)
 				# import pdb;pdb.set_trace()
 				optimizer.step()
@@ -188,7 +188,7 @@ def run(args):
 				print('step:%5d/%5d' % (optimizer.global_step - 1, max_step),
 					'loss:%.4f' % (avg_meter.pop('loss')),
 					'imps:%.1f' % ((iter+1) * args.irn_batch_size / timer.get_stage_elapsed()),
-					'grad_norm:%.4f' % grad_norm,
+					# 'grad_norm:%.4f' % grad_norm,
 					'lr: %.4f' % (optimizer.param_groups[0]['lr']),
 					'etc:%s' % (timer.str_estimated_complete()), flush=True)
 		else:
