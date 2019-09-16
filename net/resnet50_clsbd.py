@@ -7,13 +7,13 @@ from net.modules import ClsbdCRF
 # Default config as proposed by Philipp Kraehenbuehl and Vladlen Koltun,
 default_conf = {
     'filter_size': 9,
-    'blur': 2,
+    'blur': 1,
     'merge': False,
     'norm': 'none',
     'weight': 'vector',
-    "unary_weight": 1,
-    "weight_init": 0.1,
-    "pos_weight":15.,
+    "unary_weight": 1.,
+    "weight_init": 1.,
+    "pos_weight":1.,
     "neg_weight":1.,
 
     'trainable': False,
@@ -24,7 +24,7 @@ default_conf = {
 
     'pos_feats': {
         'sdims': 50,
-        'compat': 2.,
+        'compat': 0.,
     },
     'col_feats': {
         # 'sdims': 80,
@@ -146,9 +146,9 @@ class Net(nn.Module):
         unary = self.make_unary_for_train(unary_raw, label)
         clsbd = self.infer_clsbd(x)[...,:unary.shape[-2],:unary.shape[-1]]
         clsbd = torch.sigmoid(clsbd)
-        pred = self.convcrf(unary, clsbd, label, num_iter=1)
+        pred, loss = self.convcrf(unary, clsbd, label, num_iter=1)
         hms = self.save_hm(unary,clsbd.repeat(1,21,1,1),pred)
-        return pred, hms
+        return pred, hms, loss
 
     def getHeatmaps(self, hms, classid):
         hm = []

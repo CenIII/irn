@@ -59,7 +59,7 @@ if __name__ == '__main__':
     parser.add_argument("--irn_network", default="net.resnet50_clsbd", type=str)
     parser.add_argument("--irn_crop_size", default=512, type=int)
     parser.add_argument("--irn_batch_size", required=True, type=int)
-    parser.add_argument("--irn_num_epoches", default=3, type=int)
+    parser.add_argument("--irn_num_epoches", default=10, type=int)
     parser.add_argument("--irn_learning_rate", required=True, type=float)
     parser.add_argument("--irn_weight_decay", default=1e-4, type=float)
     parser.add_argument("--quick_make_sem", default=False)

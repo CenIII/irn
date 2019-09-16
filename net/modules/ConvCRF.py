@@ -379,8 +379,8 @@ class MessagePassingCol():
                 # expand tmp_arr via index selection
                 tmp_arr = self._expand_circle(tmp_arr,span,i)
                 # Question: gaussian center element? 
-            gaussian = 1. - gaussian
-            gaussian[:,span,span] = 1.
+            # gaussian = 1. - gaussian
+            gaussian[:,span,span] = 0.
         else:
             for dx in range(-span, span + 1):
                 for dy in range(-span, span + 1):
@@ -402,11 +402,7 @@ class MessagePassingCol():
             bs, 1, self.filter_size, self.filter_size,
             npixels[0], npixels[1])
 
-    def _compute_gaussian(self, input, label, key, gaussian, norm=None):
-
-        if norm is not None:
-            input = input * norm
-
+    def _make_input_col(self,input,label):
         shape = input.shape
         num_channels = shape[1]
         bs = shape[0]
@@ -449,6 +445,14 @@ class MessagePassingCol():
                 bs, num_channels, self.filter_size, self.filter_size,
                 npixels[0], npixels[1])
             input_col = input_unfold
+        return input_col, pl
+
+    def _compute_gaussian(self, input_col, gaussian, norm=None):
+        shape = input_col.shape
+        num_channels = shape[1]
+        bs = shape[0]
+        # if norm is not None:
+        #     input = input * norm
 
         k_sqr = self.filter_size * self.filter_size
 
@@ -459,13 +463,14 @@ class MessagePassingCol():
         #     product = gaussian * input_col #* pl.unsqueeze(2).unsqueeze(3)
         # else:
         #     product = gaussian * input_col
-        product = gaussian * input_col
+        # import pdb;pdb.set_trace()
+        product = - torch.log(gaussian+1e-5) * input_col
 
         if self.verbose:
             show_memusage(name="Product")
 
         product = product.view([bs, num_channels,
-                                k_sqr, npixels[0], npixels[1]])
+                                k_sqr, input_col.shape[-2], input_col.shape[-1]])
 
         message = product.sum(2)
 
@@ -487,8 +492,8 @@ class MessagePassingCol():
             message = message.view(shape)
             assert(message.shape == shape)
 
-        if norm is not None:
-            message = norm * message
+        # if norm is not None:
+        #     message = norm * message
 
         return message
         
@@ -500,10 +505,11 @@ class MessagePassingCol():
         #     pred = 0
         #     for gaus, norm in zip(self._gaus_list, self._norm_list):
         #         pred += self._compute_gaussian(input, gaus, norm)
+        input_col, pl = self._make_input_col(input, label)
         preds = {}
         for k,v in self._gaus_list.items():
-            preds[k] = self._compute_gaussian(input, label, k, v)
-        return preds
+            preds[k] = self._compute_gaussian(input_col, v)
+        return preds, input_col, pl
 
 class ConvCRF(nn.Module):
     """
@@ -597,6 +603,7 @@ class ConvCRF(nn.Module):
             pyinn=self.pyinn)
 
     def inference(self, unary, label, num_iter=3):
+        N = unary.shape[0]
         # FIXME: unary must be logits from cam layer. psi_unary = -unary and prediction = softmax(unary)
         # △ 0 Initialize: Q(i.e. prediction) and psi(i.e. psi_unary)
         psi_unary = - F.log_softmax(unary, dim=1, _stacklevel=5) #- unary
@@ -604,8 +611,8 @@ class ConvCRF(nn.Module):
 
         for i in range(num_iter):
             # △ 1 Message passing
-            messages = self.kernel.compute(prediction, label)
-
+            messages, input_col, pl = self.kernel.compute(prediction, label)
+            _,C,K,_,W,H = input_col.shape
             # △ 2 Compatibility transform
             # import pdb;pdb.set_trace()
             neg_message = self.neg_comp(messages['neg'])
@@ -615,16 +622,27 @@ class ConvCRF(nn.Module):
             # pos_message[:,0] /= 1.1
             # neg_message[:,0] *= 1.2
             # △ 3 Local Update (and normalize)
-            if self.weight is None:
-                prediction = - psi_unary - pos_message - neg_message
-            else:
-                prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * (self.pos_weight*pos_message + self.neg_weight*neg_message)
-
+            
+            pl_pred = (prediction*pl)[:,:,None,None]
+            # import pdb;pdb.set_trace()
+            pos_norm = (pl_pred*input_col).view(N,C,-1).sum(dim=2)[:,:,None,None]#+1e-3
+            pos_norm[:,1:] = pos_norm[:,1:].sum(dim=1,keepdim=True)
+            pos_norm *= 2.
+            neg_input_col = self.neg_comp(input_col.view(N,C,-1,1)).view(input_col.shape)
+            neg_norm = (pl_pred*neg_input_col).view(N,-1).sum(dim=1)[:,None,None,None]#+1e-3
+            # neg_norm2 = (pl_pred*neg_input_col).view(N,C,-1).sum(dim=2)[:,:,None,None]*21#+1e-3
+            # if self.weight is None:
+            #     prediction = - psi_unary - pos_message - neg_message
+            # else:
+            prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * (self.pos_weight*pos_message/pos_norm + self.neg_weight*neg_message/neg_norm)
+            # import pdb;pdb.set_trace()
             # if not i == num_iter - 1 or self.final_softmax:
             #     if self.conf['softmax']:
-            prediction = F.softmax(prediction, dim=1)
-        
-        return prediction
+            # prediction = F.softmax(prediction, dim=1)
+        # import pdb;pdb.set_trace()
+        loss = - (prediction*pl_pred.squeeze()).view(N,-1).sum(dim=1)
+        # prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * (self.pos_weight*pos_message/pos_norm + self.neg_weight*neg_message/neg_norm2)
+        return prediction, loss
 
 
 def get_test_conf():
