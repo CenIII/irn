@@ -76,6 +76,14 @@ def compute_loss(crit,pred,label):
 	loss = crit(pred_flat[mask_inds],label_flat[mask_inds])
 	return loss
 
+def get_grad_norm(parameters, norm_type=2):
+	total_norm = 0
+	for p in parameters:
+		param_norm = p.grad.data.norm(norm_type)
+		total_norm += param_norm.item() ** norm_type
+	total_norm = total_norm ** (1. / norm_type)
+	return total_norm
+
 def run(args):
 
 	path_index = indexing.PathIndex(radius=10, default_size=(args.irn_crop_size // 4, args.irn_crop_size // 4))
@@ -150,24 +158,26 @@ def run(args):
 			# fg_pos_label = pack['aff_fg_pos_label'].cuda(non_blocking=True)
 			# neg_label = pack['aff_neg_label'].cuda(non_blocking=True)
 			# import pdb;pdb.set_trace()
-			pred, hms, loss = model(img, label.clone())
-			pred1, hms1, loss1 = irn(img[0:1], label.clone()[0:1])
-			hms[-1] = hms1[-2].repeat(img.shape[0],1,1,1)
-			# visualization
-			if (optimizer.global_step-1)%20 == 0 and args.cam_visualize_train:
-				visualize(img, model.module, hms, cls_label, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir)
-				visualize_all_classes(hms, cls_label, optimizer.global_step-1, args.vis_out_dir, origin=0, descr='unary')
-				visualize_all_classes(hms, cls_label, optimizer.global_step-1, args.vis_out_dir, origin=2, descr='convcrf')
-			# TODO: masked pixel cross-entropy loss compute. 
-			# loss = compute_loss(crit, pred, label)
-			# import pdb;pdb.set_trace()
-			loss = loss.sum()/loss.shape[0]
-			avg_meter.add({'loss': loss})
-
-			# total_loss = (pos_aff_loss + neg_aff_loss)/2 + (dp_fg_loss + dp_bg_loss)/2
 			with autograd.detect_anomaly():
+				pred, hms, loss = model(img, label.clone())
+				pred1, hms1, loss1 = irn(img[0:1], label.clone()[0:1])
+				hms[-1] = hms1[-2].repeat(img.shape[0],1,1,1)
+				# visualization
+				if (optimizer.global_step-1)%20 == 0 and args.cam_visualize_train:
+					visualize(img, model.module, hms, cls_label, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir)
+					visualize_all_classes(hms, cls_label, optimizer.global_step-1, args.vis_out_dir, origin=0, descr='unary')
+					visualize_all_classes(hms, cls_label, optimizer.global_step-1, args.vis_out_dir, origin=2, descr='convcrf')
+				# TODO: masked pixel cross-entropy loss compute. 
+				# loss = compute_loss(crit, pred, label)
+				# import pdb;pdb.set_trace()
+				loss = loss.sum()/loss.shape[0]
+				avg_meter.add({'loss': loss})
+
+				# total_loss = (pos_aff_loss + neg_aff_loss)/2 + (dp_fg_loss + dp_bg_loss)/2
+			
 				optimizer.zero_grad()
 				loss.backward()
+				grad_norm = get_grad_norm(param_groups)
 				# clip_grad_norm_(model.parameters(), 2.)
 				# import pdb;pdb.set_trace()
 				optimizer.step()
@@ -178,6 +188,7 @@ def run(args):
 				print('step:%5d/%5d' % (optimizer.global_step - 1, max_step),
 					'loss:%.4f' % (avg_meter.pop('loss')),
 					'imps:%.1f' % ((iter+1) * args.irn_batch_size / timer.get_stage_elapsed()),
+					'grad_norm:%.4f' % grad_norm,
 					'lr: %.4f' % (optimizer.param_groups[0]['lr']),
 					'etc:%s' % (timer.str_estimated_complete()), flush=True)
 		else:

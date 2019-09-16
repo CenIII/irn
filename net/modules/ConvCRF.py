@@ -375,7 +375,10 @@ class MessagePassingCol():
                 # compare with tmp_arr, max to obtain new tmp_arr
                 tmp_arr = torch.max(src_arr,tmp_arr)
                 # assign tmp_arr to ith circle of gaussian
-                gaussian[:,ii,jj] += tmp_arr
+                update = gaussian.data.new(gaussian.shape).fill_(0.)
+                update[:,ii,jj] = tmp_arr
+                gaussian = gaussian + update
+                # gaussian[:,ii,jj] += tmp_arr
                 # expand tmp_arr via index selection
                 tmp_arr = self._expand_circle(tmp_arr,span,i)
                 # Question: gaussian center element? 
@@ -626,10 +629,10 @@ class ConvCRF(nn.Module):
             pl_pred = (prediction*pl)[:,:,None,None]
             # import pdb;pdb.set_trace()
             pos_norm = (pl_pred*input_col).view(N,C,-1).sum(dim=2)[:,:,None,None]#+1e-3
-            pos_norm[:,1:] = pos_norm[:,1:].sum(dim=1,keepdim=True)
+            pos_norm[:,1:] = pos_norm[:,1:].sum(dim=1,keepdim=True).detach()
             pos_norm *= 2.
-            neg_input_col = self.neg_comp(input_col.view(N,C,-1,1)).view(input_col.shape)
-            neg_norm = (pl_pred*neg_input_col).view(N,-1).sum(dim=1)[:,None,None,None]#+1e-3
+            neg_input_col = self.neg_comp(input_col.view(N,C,-1,1)).view(input_col.shape).detach()
+            neg_norm = (pl_pred*neg_input_col).view(N,-1).sum(dim=1)[:,None,None,None].detach()#+1e-3
             # neg_norm2 = (pl_pred*neg_input_col).view(N,C,-1).sum(dim=2)[:,:,None,None]*21#+1e-3
             # if self.weight is None:
             #     prediction = - psi_unary - pos_message - neg_message
