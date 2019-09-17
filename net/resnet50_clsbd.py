@@ -146,9 +146,9 @@ class Net(nn.Module):
         unary = self.make_unary_for_train(unary_raw, label)
         clsbd = self.infer_clsbd(x)[...,:unary.shape[-2],:unary.shape[-1]]
         clsbd = torch.sigmoid(clsbd)
-        pred, loss = self.convcrf(unary, clsbd, label, num_iter=1)
+        pred = self.convcrf(unary, clsbd, label, num_iter=1)
         hms = self.save_hm(unary,clsbd.repeat(1,21,1,1),pred)
-        return pred, hms, loss
+        return pred, hms
 
     def getHeatmaps(self, hms, classid):
         hm = []

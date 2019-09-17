@@ -159,8 +159,8 @@ def run(args):
 			# neg_label = pack['aff_neg_label'].cuda(non_blocking=True)
 			# import pdb;pdb.set_trace()
 			with autograd.detect_anomaly():
-				pred, hms, loss = model(img, label.clone())
-				pred1, hms1, loss1 = irn(img[0:1], label.clone()[0:1])
+				pred, hms = model(img, label.clone())
+				pred1, hms1 = irn(img[0:1], label.clone()[0:1])
 				hms[-1] = hms1[-2].repeat(img.shape[0],1,1,1)
 				# visualization
 				if (optimizer.global_step-1)%20 == 0 and args.cam_visualize_train:
@@ -168,9 +168,11 @@ def run(args):
 					visualize_all_classes(hms, cls_label, optimizer.global_step-1, args.vis_out_dir, origin=0, descr='unary')
 					visualize_all_classes(hms, cls_label, optimizer.global_step-1, args.vis_out_dir, origin=2, descr='convcrf')
 				# TODO: masked pixel cross-entropy loss compute. 
-				# loss = compute_loss(crit, pred, label)
 				# import pdb;pdb.set_trace()
-				loss = loss.sum()/loss.shape[0]
+				loss = compute_loss(crit, pred, label)
+				
+
+				# loss = loss.sum()/loss.shape[0]
 				avg_meter.add({'loss': loss})
 
 				# total_loss = (pos_aff_loss + neg_aff_loss)/2 + (dp_fg_loss + dp_bg_loss)/2
