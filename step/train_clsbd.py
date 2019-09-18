@@ -202,5 +202,5 @@ def run(args):
 		else:
 			timer.reset_stage()
 
-	# torch.save(model.state_dict(), args.irn_weights_name)
+	torch.save(model.state_dict(), args.irn_weights_name)
 	torch.cuda.empty_cache()

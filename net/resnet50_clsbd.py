@@ -6,7 +6,7 @@ from net.modules import ClsbdCRF
 
 # Default config as proposed by Philipp Kraehenbuehl and Vladlen Koltun,
 default_conf = {
-    'filter_size': 9,
+    'filter_size': 19,
     'blur': 1,
     'merge': False,
     'norm': 'none',

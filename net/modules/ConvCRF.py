@@ -320,11 +320,17 @@ class MessagePassingCol():
         return ii,jj
 
     def _expand_circle(self,tmp_arr,span,i):
-        if i%2 == 1:
-            inds = [0]*2+list(range(1,2*i))+[2*i]*2+[0]+[2*i]+list(range(2*i+1,6*i-1))+[6*i-1]+[8*i-1]+[6*i-1]*2 + list(range(6*i,8*i-1))+[8*i-1]*2
-        else:
-            inds = [0,1] + list(range(1,2*i)) + [2*i-1] + [2*i] + [2*i+1, 2*i+2] + list(range(2*i+1,6*i-1)) + list(range(6*i-3,6*i+1)) + list(range(6*i,8*i-1)) + [8*i-2,8*i-1]
-        tmp_arr = tmp_arr[:,inds]
+        # if i%2 == 1:
+        #     inds = [0]*2+list(range(1,2*i))+[2*i]*2+[0]+[2*i]+list(range(2*i+1,6*i-1))+[6*i-1]+[8*i-1]+[6*i-1]*2 + list(range(6*i,8*i-1))+[8*i-1]*2
+        # else:
+        #     inds = [0,1] + list(range(1,2*i)) + [2*i-1] + [2*i] + [2*i+1, 2*i+2] + list(range(2*i+1,6*i-1)) + list(range(6*i-3,6*i+1)) + list(range(6*i,8*i-1)) + [8*i-2,8*i-1]
+        # tmp_arr = tmp_arr[:,inds]
+        inds1 = [0]*2+list(range(1,2*i))+[2*i]*2+[0]+[2*i]+list(range(2*i+1,6*i-1))+[6*i-1]+[8*i-1]+[6*i-1]*2 + list(range(6*i,8*i-1))+[8*i-1]*2
+        # inds2 = [0,1] + list(range(1,2*i)) + [2*i-1] + [2*i] + [2*i+1, 2*i+2] + list(range(2*i+1,6*i-1)) + list(range(6*i-3,6*i+1)) + list(range(6*i,8*i-1)) + [8*i-2,8*i-1]
+        inds2 = list(range(0,i))+[i]*3+list(range(i+1,2*i+1))+list(range(2*i+1,4*i-1))+[4*i-1,4*i]*3+list(range(4*i+1,6*i-1))+list(range(6*i-1,7*i-1))+[7*i-1]*3+list(range(7*i,8*i))
+        tmp_arr1 = tmp_arr[:,inds1]
+        tmp_arr2 = tmp_arr[:,inds2]
+        tmp_arr = torch.max(tmp_arr1,tmp_arr2)
         return tmp_arr
 
     def _create_convolutional_filters(self, features, is_clsbd):
