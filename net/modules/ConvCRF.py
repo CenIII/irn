@@ -612,7 +612,7 @@ class ConvCRF(nn.Module):
         psi_unary = - F.log_softmax(unary, dim=1, _stacklevel=5) #- unary
         prediction = F.softmax(unary, dim=1)
 
-        norm = True
+        norm = False
         for i in range(num_iter):
             # △ 1 Message passing
             messages, input_col, pl = self.kernel.compute(prediction, label)
@@ -633,15 +633,14 @@ class ConvCRF(nn.Module):
                 
             # △ 3 Local Update (and normalize)
             
-            pl_pred = (prediction*pl).detach() #[:,:,None,None]
-            neg_message = neg_message*pl_pred
-            pos_message = pos_message*pl_pred
-            # pos_norm = (pl_pred*input_col).view(N,C,-1).sum(dim=2)[:,:,None,None]
-            # pos_norm[:,1:] = pos_norm[:,1:].sum(dim=1,keepdim=True)
+            pl_pred = (prediction*pl)[:,:,None,None].detach()
+
+            pos_norm = (pl_pred*input_col).view(N,C,-1).sum(dim=2)[:,:,None,None]
+            pos_norm[:,1:] = pos_norm[:,1:].sum(dim=1,keepdim=True)
             # pos_norm *= 2.
-            # pos_norm = (pos_norm+1.).detach()
-            # neg_input_col = self.neg_comp(input_col.view(N,C,-1,1)).view(input_col.shape)
-            # neg_norm = ((pl_pred*neg_input_col).view(N,-1).sum(dim=1)[:,None,None,None]+1.).detach()
+            pos_norm = torch.clamp(pos_norm, 1.).detach()
+            neg_input_col = self.neg_comp(input_col.view(N,C,-1,1)).view(input_col.shape)
+            neg_norm = torch.clamp((pl_pred*neg_input_col).view(N,-1).sum(dim=1)[:,None,None,None],1.).detach()
 
             
 
@@ -649,11 +648,11 @@ class ConvCRF(nn.Module):
             #     prediction = - psi_unary - pos_message - neg_message
             # else:
             # import pdb;pdb.set_trace()
-            prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * (self.pos_weight*pos_message*3 + self.neg_weight*neg_message*3)
+            prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * (self.pos_weight*pos_message/pos_norm + self.neg_weight*neg_message/neg_norm)
             # if not i == num_iter - 1 or self.final_softmax:
             #     if self.conf['softmax']:
-            prediction = F.softmax(prediction, dim=1)
-        # loss = - (prediction*pl_pred.squeeze()).view(N,-1).sum(dim=1)
+            # prediction = prediction*pl_pred#F.softmax(prediction*pl_pred, dim=1)
+        prediction = (prediction*pl_pred.squeeze())#.view(N,-1).sum(dim=1)
         # prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * (self.pos_weight*pos_message/pos_norm + self.neg_weight*neg_message/neg_norm2)
         return prediction#, loss
 

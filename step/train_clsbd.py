@@ -69,11 +69,18 @@ def visualize_all_classes(hms, label, iterno, savepath, origin=0, descr='orig'):
 def compute_loss(crit,pred,label):
 	label = label.type(torch.cuda.LongTensor)
 	N,C,W,H = pred.shape
-	pred = torch.log(pred + 1e-5)
+	# pred = torch.log(pred + 1e-5)
 	pred_flat = pred.permute(0,2,3,1).contiguous().view(-1,C)
 	label_flat = label.view(-1)
-	mask_inds = torch.nonzero(label_flat<255.).squeeze()
-	loss = crit(pred_flat[mask_inds],label_flat[mask_inds])
+	
+	bg_inds = torch.nonzero(label_flat==0.).squeeze()
+	loss = crit(pred_flat[bg_inds],label_flat[bg_inds])
+	label_flat[label_flat==0.] = 255.
+	fg_inds = torch.nonzero(label_flat<255.).squeeze()
+	# import pdb;pdb.set_trace()
+	
+	loss = loss + crit(pred_flat[fg_inds],label_flat[fg_inds])
+	loss = loss / 2.
 	return loss
 
 def get_grad_norm(parameters, norm_type=2):
@@ -169,10 +176,9 @@ def run(args):
 					visualize_all_classes(hms, cls_label, optimizer.global_step-1, args.vis_out_dir, origin=2, descr='convcrf')
 				# TODO: masked pixel cross-entropy loss compute. 
 				# import pdb;pdb.set_trace()
-				loss = compute_loss(crit, pred, label)
+				# loss = compute_loss(crit, pred, label)
+				loss = - pred.sum()/pred.shape[0]
 				
-
-				# loss = loss.sum()/loss.shape[0]
 				avg_meter.add({'loss': loss})
 
 				# total_loss = (pos_aff_loss + neg_aff_loss)/2 + (dp_fg_loss + dp_bg_loss)/2
