@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from torch.nn.utils import clip_grad_norm_
 from torch import autograd
+from net.resnet50_clsbd import default_conf
 
 def visualize(x, net, hms, label, cb, iterno, img_denorm, savepath):
 		# plt.figure(1)
@@ -99,10 +100,10 @@ def run(args):
 	cam.load_state_dict(torch.load(args.cam_weights_name + '.pth'), strict=True)
 	cam.eval()
 
-	model = getattr(importlib.import_module(args.irn_network), 'Net')(cam)
+	model = getattr(importlib.import_module(args.irn_network), 'Net')(cam, default_conf)
 	# model = torchutils.reload_model(model, './exp/original_cam/sess/res50_irn.pth')
 
-	irn = getattr(importlib.import_module(args.irn_network), 'Net')(cam)
+	irn = getattr(importlib.import_module(args.irn_network), 'Net')(cam, default_conf)
 	irn = torchutils.reload_model(irn, './exp/original_cam/sess/res50_irn.pth')
 
 	# model.load_state_dict(torch.load(args.irn_weights_name), strict=False)

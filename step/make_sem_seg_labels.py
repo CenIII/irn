@@ -12,6 +12,7 @@ import imageio
 import voc12.dataloader
 from misc import torchutils, indexing
 import tqdm 
+from net.resnet50_clsbd import infer_conf
 
 cudnn.enabled = True
 
@@ -65,15 +66,14 @@ def run(args):
 	cam.load_state_dict(torch.load(args.cam_weights_name + '.pth'), strict=True)
 	cam.eval()
 
-	model = getattr(importlib.import_module(args.irn_network), 'EdgeDisplacement')(cam)
-	model = torchutils.reload_model(model, './exp/original_cam/sess/res50_irn.pth')
+	model = getattr(importlib.import_module(args.irn_network), 'EdgeDisplacement')(cam, infer_conf)
+	model = torchutils.reload_model(model, './exp/original_cam/sess/res50_irn_clsbd.pth')
 
 	# model.load_state_dict(torch.load(args.irn_weights_name), strict=False)
 	model.eval()
 
 	n_gpus = torch.cuda.device_count()
 
-	
 	if args.quick_make_sem:
 		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.quick_list,
 															 label_dir=args.ir_label_out_dir,

@@ -39,10 +39,44 @@ default_conf = {
     "pyinn": False
 }
 
+infer_conf = {
+    'filter_size': 11,
+    'blur': 2,
+    'merge': False,
+    'norm': 'none',
+    'weight': 'vector',
+    "unary_weight": 1.,
+    "weight_init": 0.1,
+    "pos_weight":13.,
+    "neg_weight":1.,
+
+    'trainable': False,
+    'convcomp': True,
+    'logsoftmax': True,  # use logsoftmax for numerical stability
+    'softmax': True,
+    'final_softmax': False,
+
+    'pos_feats': {
+        'sdims': 50,
+        'compat': 1.5,
+    },
+    'col_feats': {
+        # 'sdims': 80,
+        # 'schan': 13,   # schan depend on the input scale.
+        #                # use schan = 13 for images in [0, 255]
+        #                # for normalized images in [-0.5, 0.5] try schan = 0.1
+        'compat': 1.,
+        'use_bias': False
+    },
+    "trainable_bias": False,
+
+    "pyinn": False
+}
+
 
 class Net(nn.Module):
 
-    def __init__(self, cam_net):
+    def __init__(self, cam_net, crf_conf):
         super(Net, self).__init__()
         self.cam_net = cam_net
         # backbone
@@ -85,7 +119,7 @@ class Net(nn.Module):
         )
         self.fc_edge6 = nn.Conv2d(160, 1, 1, bias=True)
 
-        self.convcrf = ClsbdCRF(default_conf, nclasses=21)
+        self.convcrf = ClsbdCRF(crf_conf, nclasses=21)
 
         self.backbone = nn.ModuleList([self.stage1, self.stage2, self.stage3, self.stage4, self.stage5])
         self.edge_layers = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge3, self.fc_edge4, self.fc_edge5, self.fc_edge6])
@@ -174,8 +208,8 @@ class Net(nn.Module):
 
 class EdgeDisplacement(Net):
 
-    def __init__(self,cam):
-        super(EdgeDisplacement, self).__init__(cam)
+    def __init__(self, cam, crf_conf):
+        super(EdgeDisplacement, self).__init__(cam, crf_conf)
 
     def forward(self, x, label, out_settings=None):
         # edge_out, _ = super().forward(x, label)
@@ -186,6 +220,7 @@ class EdgeDisplacement(Net):
         unary = self.make_unary_for_infer(unary_raw, label)
         clsbd = self.infer_clsbd(x)[...,:unary.shape[-2],:unary.shape[-1]]
         clsbd = torch.sigmoid(flip_add(clsbd)/2)
+        # clsbd *= clsbd.max(dim=)
         pred = self.convcrf(unary, clsbd, label, num_iter=8)
         # hms = self.save_hm(unary,clsbd.repeat(1,21,1,1),pred)
         return pred#, hms
