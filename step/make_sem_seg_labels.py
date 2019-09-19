@@ -36,7 +36,9 @@ def _work(process_id, model, dataset, args, quick=False):
 
 			# edge, dp = model(pack['img'][0].cuda(non_blocking=True))
 			# import pdb;pdb.set_trace()
-			rw = model(pack['img'][0].cuda(non_blocking=True), pack['seg_label'].cuda(non_blocking=True))
+			for k in range(len(pack['img'])):
+				pack['img'][k] = pack['img'][k].cuda(non_blocking=True)
+			rw = model(pack['img'], pack['seg_label'].cuda(non_blocking=True))
 
 			cam_dict = np.load(args.cam_out_dir + '/' + img_name + '.npy', allow_pickle=True).item()
 
@@ -50,10 +52,10 @@ def _work(process_id, model, dataset, args, quick=False):
 			rw_up = F.interpolate(rw, scale_factor=4, mode='bilinear', align_corners=False)[0, :, :orig_img_size[0], :orig_img_size[1]]
 			rw_up = rw_up / torch.max(rw_up)
 
-			rw_up_bg = F.pad(rw_up[1:], (0, 0, 0, 0, 1, 0), value=0.9)#args.sem_seg_bg_thres
+			rw_up_bg = F.pad(rw_up[1:], (0, 0, 0, 0, 1, 0), value=0.5)#args.sem_seg_bg_thres
 			rw_pred = torch.argmax(rw_up_bg, dim=0).cpu().numpy()
 
-			rw_pred = keys[rw_pred]
+			rw_pred = keys[rw_pred]*15
 
 			imageio.imsave(os.path.join(args.sem_seg_out_dir, img_name + '.png'), rw_pred.astype(np.uint8))
 			# if process_id == n_gpus - 1 and iter % (len(databin) // 20) == 0:
@@ -67,7 +69,7 @@ def run(args):
 	cam.eval()
 
 	model = getattr(importlib.import_module(args.irn_network), 'EdgeDisplacement')(cam, infer_conf)
-	model = torchutils.reload_model(model, './exp/original_cam/sess/res50_irn_clsbd.pth')
+	model = torchutils.reload_model(model, './exp/original_cam/sess/res50_irn.pth')
 
 	# model.load_state_dict(torch.load(args.irn_weights_name), strict=False)
 	model.eval()
@@ -78,7 +80,7 @@ def run(args):
 		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.quick_list,
 															 label_dir=args.ir_label_out_dir,
 															 voc12_root=args.voc12_root,
-															 scales=(1.0,))
+															 scales=(1.0,0.5))
 		_work(0,model,dataset,args,quick=True)
 	else:
 		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.infer_list,

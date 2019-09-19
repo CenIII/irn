@@ -76,7 +76,7 @@ if __name__ == '__main__':
     parser.add_argument("--irn_weights_name", default="sess/res50_irn_clsbd.pth", type=str)
     parser.add_argument("--cam_out_dir", default="result/cam", type=str)
     parser.add_argument("--vis_out_dir", default="result/vis_clsbd", type=str)
-    parser.add_argument("--ir_label_out_dir", default="result/ir_label", type=str)
+    parser.add_argument("--ir_label_out_dir", default="result/ir_label20", type=str)
     parser.add_argument("--sem_seg_out_dir", default="result/sem_seg_clsbd", type=str)
     parser.add_argument("--ins_seg_out_dir", default="result/ins_seg", type=str)
 

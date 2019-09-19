@@ -40,14 +40,14 @@ default_conf = {
 }
 
 infer_conf = {
-    'filter_size': 11,
+    'filter_size': 9,
     'blur': 2,
     'merge': False,
     'norm': 'none',
     'weight': 'vector',
     "unary_weight": 1.,
-    "weight_init": 0.1,
-    "pos_weight":13.,
+    "weight_init": 0.08,
+    "pos_weight":10.,
     "neg_weight":1.,
 
     'trainable': False,
@@ -57,8 +57,8 @@ infer_conf = {
     'final_softmax': False,
 
     'pos_feats': {
-        'sdims': 50,
-        'compat': 1.5,
+        'sdims': 30,
+        'compat': 0.,
     },
     'col_feats': {
         # 'sdims': 80,
@@ -145,7 +145,7 @@ class Net(nn.Module):
         # 1. rescale
         unary_raw = F.interpolate(unary_raw, label.shape[-2:], mode='bilinear', align_corners=False)#[0] #torch.unsqueeze(unary_raw, 0)
         # 2. add background
-        unary_raw = F.pad(unary_raw, (0, 0, 0, 0, 1, 1, 0, 0), mode='constant',value=1.)
+        unary_raw = F.pad(unary_raw, (0, 0, 0, 0, 1, 1, 0, 0), mode='constant',value=0.)
         # 3. create and apply mask
         label[label==255.] = 21
         label = label.unsqueeze(1)
@@ -153,10 +153,10 @@ class Net(nn.Module):
         mask = mask.scatter_(1,label.type(torch.cuda.LongTensor),1.)
         unary = (unary_raw * mask)[:,:-1]
         # unary[unary>0.] = 150.
-        tmp = mask[:,:-1].sum(dim=2,keepdim=True).sum(dim=3,keepdim=True) # [N,21,1,1]
-        tmp[tmp>0.] = 1.
-        unary += tmp
-        unary[:,0] = 1.
+        # tmp = mask[:,:-1].sum(dim=2,keepdim=True).sum(dim=3,keepdim=True) # [N,21,1,1]
+        # tmp[tmp>0.] = 1.
+        # unary += tmp
+        # unary[:,0] = 1.
         return unary 
 
     def make_unary_for_train(self, unary_raw, label):
@@ -215,13 +215,26 @@ class EdgeDisplacement(Net):
         # edge_out, _ = super().forward(x, label)
         def flip_add(inp,keepdim=True):
             return inp[0:1]+inp[1:2].flip(-1)
-        unary_raw = self.cam_net(x)
+        # import pdb;pdb.set_trace()
+        
+        x1 = x[0].squeeze()
+        unary_raw = self.cam_net(x1)
         unary_raw = flip_add(F.relu(unary_raw)).detach()
-        unary = self.make_unary_for_infer(unary_raw, label)
-        clsbd = self.infer_clsbd(x)[...,:unary.shape[-2],:unary.shape[-1]]
+        unary = self.make_unary_for_infer(unary_raw, label.clone())
+        clsbd = self.infer_clsbd(x1)[...,:unary.shape[-2],:unary.shape[-1]]
         clsbd = torch.sigmoid(flip_add(clsbd)/2)
+        
+        x2 = x[1].squeeze()
+        unary_raw2 = self.cam_net(x2)
+        unary_raw2 = flip_add(F.relu(unary_raw2)).detach()
+        unary_raw2 = F.interpolate(unary_raw2,scale_factor=2,mode='bilinear',align_corners=False)
+        unary2 = self.make_unary_for_infer(unary_raw2, label.clone())
+        clsbd2 = self.infer_clsbd(x2)#[...,:unary.shape[-2],:unary.shape[-1]]
+        clsbd2 = F.interpolate(clsbd2,scale_factor=2,mode='bilinear',align_corners=False)[...,:unary.shape[-2],:unary.shape[-1]]
+        clsbd2 = torch.sigmoid(flip_add(clsbd2)/2)
+        
         # clsbd *= clsbd.max(dim=)
-        pred = self.convcrf(unary, clsbd, label, num_iter=8)
+        pred = self.convcrf((unary+unary2)/2., (clsbd+clsbd2)/2, label, num_iter=20)
         # hms = self.save_hm(unary,clsbd.repeat(1,21,1,1),pred)
         return pred#, hms
 
