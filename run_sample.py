@@ -11,6 +11,7 @@ def join_path(args):
     args.cam_out_dir = os.path.join(args.exp_root, args.cam_out_dir)
     args.vis_out_dir = os.path.join(args.exp_root, args.vis_out_dir)
     args.ir_label_out_dir = os.path.join(args.exp_root, args.ir_label_out_dir)
+    args.unary_out_dir = os.path.join(args.exp_root, args.unary_out_dir)
     args.sem_seg_out_dir = os.path.join(args.exp_root, args.sem_seg_out_dir)
     args.ins_seg_out_dir = os.path.join(args.exp_root, args.ins_seg_out_dir)
 
@@ -21,6 +22,7 @@ def join_path(args):
     os.makedirs(args.cam_out_dir, exist_ok=True)
     os.makedirs(args.vis_out_dir, exist_ok=True)
     os.makedirs(args.ir_label_out_dir, exist_ok=True)
+    os.makedirs(args.unary_out_dir, exist_ok=True)
     os.makedirs(args.sem_seg_out_dir, exist_ok=True)
     os.makedirs(args.ins_seg_out_dir, exist_ok=True)
     return args
@@ -76,6 +78,7 @@ if __name__ == '__main__':
     parser.add_argument("--irn_weights_name", default="sess/res50_irn_clsbd.pth", type=str)
     parser.add_argument("--cam_out_dir", default="result/cam", type=str)
     parser.add_argument("--vis_out_dir", default="result/vis_clsbd", type=str)
+    parser.add_argument("--unary_out_dir", default="result/unary", type=str)
     parser.add_argument("--ir_label_out_dir", default="result/ir_label20", type=str)
     parser.add_argument("--sem_seg_out_dir", default="result/sem_seg_clsbd", type=str)
     parser.add_argument("--ins_seg_out_dir", default="result/ins_seg", type=str)
@@ -85,6 +88,7 @@ if __name__ == '__main__':
     parser.add_argument("--make_cam_pass", default=True)
     parser.add_argument("--eval_cam_pass", default=True)
     parser.add_argument("--cam_to_ir_label_pass", default=True)
+    parser.add_argument("--make_unary_pass", default=True)
     parser.add_argument("--train_irn_pass", default=True)
     parser.add_argument("--make_ins_seg_pass", default=False)
     parser.add_argument("--eval_ins_seg_pass", default=False)
@@ -121,6 +125,12 @@ if __name__ == '__main__':
 
         timer = pyutils.Timer('step.cam_to_ir_label:')
         step.cam_to_ir_label.run(args)
+
+    if args.make_unary_pass is True:
+        import step.make_unary
+
+        timer = pyutils.Timer('step.make_unary:')
+        step.make_unary.run(args)
 
     if args.train_irn_pass is True:
         import step.train_clsbd

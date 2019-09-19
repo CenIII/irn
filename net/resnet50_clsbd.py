@@ -215,7 +215,7 @@ class EdgeDisplacement(Net):
         # edge_out, _ = super().forward(x, label)
         def flip_add(inp,keepdim=True):
             return inp[0:1]+inp[1:2].flip(-1)
-        # import pdb;pdb.set_trace()
+        import pdb;pdb.set_trace()
         
         x1 = x[0].squeeze()
         unary_raw = self.cam_net(x1)
