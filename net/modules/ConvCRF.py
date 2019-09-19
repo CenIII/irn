@@ -241,7 +241,7 @@ def polarness(x, label): #[1, 21, 42, 63]
 	# keys = np.unique(label.cpu())[:-1].astype(np.int32)
 	D = x.shape[1] #len(keys) #
 	x_t = x#[:,keys]
-	x_t /= x_t.sum(dim=1,keepdim=True)
+	# x_t /= x_t.sum(dim=1,keepdim=True)
 	entropy = (- x_t * torch.log(x_t+1e-5)).sum(dim=1,keepdim=True)
 	if D > 1:
 		pl = 1. - entropy / np.log(D)
@@ -625,7 +625,11 @@ class ConvCRF(nn.Module):
 		# △ 0 Initialize: Q(i.e. prediction) and psi(i.e. psi_unary)
 		# import pdb;pdb.set_trace()
 		psi_unary = - F.log_softmax(unary, dim=1, _stacklevel=5) #- unary
-		prediction = F.softmax(unary, dim=1)
+		# import pdb;pdb.set_trace()
+		divs = torch.clamp(unary.view(21,-1).max(dim=1)[0],1.)[None,:,None,None]
+		prediction = unary/divs
+
+		# prediction = F.softmax(unary, dim=1)
 
 		norm = False
 		for i in range(num_iter):
