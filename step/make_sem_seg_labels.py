@@ -55,9 +55,10 @@ def _work(process_id, model, dataset, args, quick=False):
 			rw_up_bg = F.pad(rw_up[1:], (0, 0, 0, 0, 1, 0), value=0.8)#args.sem_seg_bg_thres
 			rw_pred = torch.argmax(rw_up_bg, dim=0).cpu().numpy()
 
-			rw_pred = keys[rw_pred]*15
-
+			rw_pred = keys[rw_pred]
 			imageio.imsave(os.path.join(args.sem_seg_out_dir, img_name + '.png'), rw_pred.astype(np.uint8))
+			imageio.imsave(os.path.join(args.sem_seg_out_dir, img_name + '_light.png'), (rw_pred*15).astype(np.uint8))
+			
 			# if process_id == n_gpus - 1 and iter % (len(databin) // 20) == 0:
 			# 	print("%d " % ((5*iter+1)//(len(databin) // 20)), end='')
 
@@ -86,7 +87,7 @@ def run(args):
 		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.infer_list,
 															 label_dir=args.ir_label_out_dir,
 															 voc12_root=args.voc12_root,
-															 scales=(1.0,))
+															 scales=(1.0,0.5))
 		dataset = torchutils.split_dataset(dataset, n_gpus)
 
 		# print("[", end='')
