@@ -38,7 +38,7 @@ def _work(process_id, model, dataset, args, quick=False):
 			# import pdb;pdb.set_trace()
 			for k in range(len(pack['img'])):
 				pack['img'][k] = pack['img'][k].cuda(non_blocking=True)
-			rw = model(pack['img'], pack['seg_label'].cuda(non_blocking=True))
+			rw = model(pack['img'], pack['unary'].cuda(non_blocking=True), pack['seg_label'].cuda(non_blocking=True))
 
 			cam_dict = np.load(args.cam_out_dir + '/' + img_name + '.npy', allow_pickle=True).item()
 
@@ -78,14 +78,16 @@ def run(args):
 	n_gpus = torch.cuda.device_count()
 
 	if args.quick_make_sem:
-		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.quick_list,
+		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF_Clsbd(args.quick_list,
 															 label_dir=args.ir_label_out_dir,
+															 unary_dir=args.unary_out_dir,
 															 voc12_root=args.voc12_root,
 															 scales=(1.0,0.5))
 		_work(0,model,dataset,args,quick=True)
 	else:
-		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.infer_list,
+		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF_Clsbd(args.infer_list,
 															 label_dir=args.ir_label_out_dir,
+															 unary_dir=args.unary_out_dir,
 															 voc12_root=args.voc12_root,
 															 scales=(1.0,0.5))
 		dataset = torchutils.split_dataset(dataset, n_gpus)

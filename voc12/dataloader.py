@@ -175,11 +175,42 @@ class VOC12ClassificationDataset(VOC12ImageDataset):
 
 class VOC12ClassificationDatasetMSF(VOC12ClassificationDataset):
 
-    def __init__(self, img_name_list_path, label_dir, voc12_root,
+    def __init__(self, img_name_list_path, voc12_root,
+                 img_normal=TorchvisionNormalize(),
+                 scales=(1.0,)):
+        self.scales = scales
+        super().__init__(img_name_list_path, voc12_root, img_normal=img_normal)
+        self.scales = scales
+
+    def __getitem__(self, idx):
+        name = self.img_name_list[idx]
+        name_str = decode_int_filename(name)
+
+        img = imageio.imread(get_img_path(name_str, self.voc12_root))
+        ms_img_list = []
+        for s in self.scales:
+            if s == 1:
+                s_img = img
+            else:
+                s_img = imutils.pil_rescale(img, s, order=3)
+            s_img = self.img_normal(s_img)
+            s_img = imutils.HWC_to_CHW(s_img)
+            ms_img_list.append(np.stack([s_img, np.flip(s_img, -1)], axis=0))
+        if len(self.scales) == 1:
+            ms_img_list = ms_img_list[0]
+
+        out = {"name": name_str, "img": ms_img_list, "size": (img.shape[0], img.shape[1]),
+               "label": torch.from_numpy(self.label_list[idx])}
+        return out
+
+class VOC12ClassificationDatasetMSF_Clsbd(VOC12ClassificationDataset):
+
+    def __init__(self, img_name_list_path, label_dir, unary_dir, voc12_root,
                  img_normal=TorchvisionNormalize(),
                  scales=(1.0,)):
         self.scales = scales
         self.label_dir = label_dir
+        self.unary_dir = unary_dir
         super().__init__(img_name_list_path, voc12_root, img_normal=img_normal)
         self.scales = scales
 
@@ -190,6 +221,9 @@ class VOC12ClassificationDatasetMSF(VOC12ClassificationDataset):
         img = imageio.imread(get_img_path(name_str, self.voc12_root))
         label = imageio.imread(os.path.join(self.label_dir, name_str + '.png'))
         label = imutils.pil_rescale(label, 0.25, 0)
+        unary = np.load(os.path.join(self.unary_dir,name_str + '.npy'), allow_pickle=True).item()['unary']
+
+
         ms_img_list = []
         for s in self.scales:
             if s == 1:
@@ -203,7 +237,7 @@ class VOC12ClassificationDatasetMSF(VOC12ClassificationDataset):
             ms_img_list = ms_img_list[0]
 
         out = {"name": name_str, "img": ms_img_list, "size": (img.shape[0], img.shape[1]), "seg_label": torch.from_numpy(np.asarray(label)),
-               "label": torch.from_numpy(self.label_list[idx])}
+               "label": torch.from_numpy(self.label_list[idx]), "unary":unary}
         return out
 
 class VOC12SegmentationDataset(Dataset):

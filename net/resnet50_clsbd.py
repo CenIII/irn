@@ -143,7 +143,7 @@ class Net(nn.Module):
     def make_unary_for_infer(self, unary_raw, label):
         # unary_raw [N, 21, W, H]
         # 1. rescale
-        unary_raw = F.interpolate(unary_raw, label.shape[-2:], mode='bilinear', align_corners=False)#[0] #torch.unsqueeze(unary_raw, 0)
+        # unary_raw = F.interpolate(unary_raw, label.shape[-2:], mode='bilinear', align_corners=False)#[0] #torch.unsqueeze(unary_raw, 0)
         # 2. add background
         unary_raw = F.pad(unary_raw, (0, 0, 0, 0, 1, 1, 0, 0), mode='constant',value=0.)
         # 3. create and apply mask
@@ -211,35 +211,24 @@ class EdgeDisplacement(Net):
     def __init__(self, cam, crf_conf):
         super(EdgeDisplacement, self).__init__(cam, crf_conf)
 
-    def forward(self, x, label, out_settings=None):
-        # edge_out, _ = super().forward(x, label)
+    def forward(self, x, unary, label, out_settings=None):
         def flip_add(inp,keepdim=True):
             return inp[0:1]+inp[1:2].flip(-1)
-        import pdb;pdb.set_trace()
+        # import pdb;pdb.set_trace()
         
+        unary = self.make_unary_for_infer(unary, label.clone())
+
+
         x1 = x[0].squeeze()
-        unary_raw = self.cam_net(x1)
-        unary_raw = flip_add(F.relu(unary_raw)).detach()
-        unary = self.make_unary_for_infer(unary_raw, label.clone())
         clsbd = self.infer_clsbd(x1)[...,:unary.shape[-2],:unary.shape[-1]]
         clsbd = torch.sigmoid(flip_add(clsbd)/2)
         
         x2 = x[1].squeeze()
-        unary_raw2 = self.cam_net(x2)
-        unary_raw2 = flip_add(F.relu(unary_raw2)).detach()
-        unary_raw2 = F.interpolate(unary_raw2,scale_factor=2,mode='bilinear',align_corners=False)
-        unary2 = self.make_unary_for_infer(unary_raw2, label.clone())
-        clsbd2 = self.infer_clsbd(x2)#[...,:unary.shape[-2],:unary.shape[-1]]
+        clsbd2 = self.infer_clsbd(x2)
         clsbd2 = F.interpolate(clsbd2,scale_factor=2,mode='bilinear',align_corners=False)[...,:unary.shape[-2],:unary.shape[-1]]
         clsbd2 = torch.sigmoid(flip_add(clsbd2)/2)
         
-        # clsbd *= clsbd.max(dim=)
-        pred = self.convcrf((unary+unary2)/2., (clsbd+clsbd2)/2, label, num_iter=20)
-        # hms = self.save_hm(unary,clsbd.repeat(1,21,1,1),pred)
-        return pred#, hms
-
-        # edge_out = torch.sigmoid(edge_out[0]/2 + edge_out[1].flip(-1)/2)
-
-        # return edge_out
+        pred = self.convcrf(unary, (clsbd+clsbd2)/2, label, num_iter=20)
+        return pred
 
 
