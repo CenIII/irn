@@ -218,7 +218,6 @@ class EdgeDisplacement(Net):
         
         unary = self.make_unary_for_infer(unary, label.clone())
 
-
         x1 = x[0].squeeze()
         clsbd = self.infer_clsbd(x1)[...,:unary.shape[-2],:unary.shape[-1]]
         clsbd = torch.sigmoid(flip_add(clsbd)/2)
