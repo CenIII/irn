@@ -46,8 +46,8 @@ infer_conf = {
     'norm': 'none',
     'weight': 'vector',
     "unary_weight": 1.,
-    "weight_init": 0.08,
-    "pos_weight":10.,
+    "weight_init": 0.1,
+    "pos_weight":8.,
     "neg_weight":1.,
 
     'trainable': False,
@@ -65,7 +65,7 @@ infer_conf = {
         # 'schan': 13,   # schan depend on the input scale.
         #                # use schan = 13 for images in [0, 255]
         #                # for normalized images in [-0.5, 0.5] try schan = 0.1
-        'compat': 1.2,
+        'compat': 1.,
         'use_bias': False
     },
     "trainable_bias": False,
