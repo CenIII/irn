@@ -47,7 +47,7 @@ infer_conf = {
     'weight': 'vector',
     "unary_weight": 1.,
     "weight_init": 0.1,
-    "pos_weight":10.,
+    "pos_weight":12.,
     "neg_weight":1.,
 
     'trainable': False,
@@ -58,7 +58,7 @@ infer_conf = {
 
     'pos_feats': {
         'sdims': 30,
-        'compat': 0.1,
+        'compat': 0.6,
     },
     'col_feats': {
         # 'sdims': 80,

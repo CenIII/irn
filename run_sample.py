@@ -65,6 +65,7 @@ if __name__ == '__main__':
     parser.add_argument("--irn_learning_rate", required=True, type=float)
     parser.add_argument("--irn_weight_decay", default=1e-4, type=float)
     parser.add_argument("--quick_make_sem", default=False)
+    parser.add_argument("--sem_eval_use_crf", default=False)
     # Random Walk Params
     parser.add_argument("--beta", default=10)
     parser.add_argument("--exp_times", default=8)

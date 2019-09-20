@@ -12,11 +12,16 @@ def run(args):
     print(args.sem_seg_out_dir)
     preds = []
     qdar = tqdm.tqdm(dataset.ids,total=len(dataset.ids),ascii=True)
+    cls_stats = np.zeros(21)
     for id in qdar:
         cls_labels = imageio.imread(os.path.join(args.sem_seg_out_dir, id + '.png')).astype(np.uint8)
         cls_labels[cls_labels == 255] = 0
         preds.append(cls_labels.copy())
+        keys = np.unique(cls_labels)
+        for k in keys:
+            cls_stats[k] += 1
 
+    # print("class stats: "+str(cls_stats))
     confusion = calc_semantic_segmentation_confusion(preds, labels)[:21, :21]
 
     gtj = confusion.sum(axis=1)
@@ -27,7 +32,10 @@ def run(args):
     fn = 1. - resj / denominator
     iou = gtjresj / denominator
 
-    print(fp[0], fn[0])
+    print("fp and fn:")
+    print("fp: "+str(np.round(fp,3)))
+    print("fn: "+str(np.round(fn,3)))
+    # print(fp[0], fn[0])
     print(np.mean(fp[1:]), np.mean(fn[1:]))
 
     print({'iou': iou, 'miou': np.nanmean(iou)})
