@@ -47,7 +47,7 @@ infer_conf = {
     'weight': 'vector',
     "unary_weight": 1.,
     "weight_init": 0.1,
-    "pos_weight":8.,
+    "pos_weight":10.,
     "neg_weight":1.,
 
     'trainable': False,
@@ -58,7 +58,7 @@ infer_conf = {
 
     'pos_feats': {
         'sdims': 30,
-        'compat': 0.,
+        'compat': 0.1,
     },
     'col_feats': {
         # 'sdims': 80,
@@ -224,10 +224,10 @@ class EdgeDisplacement(Net):
         
         x2 = x[1].squeeze()
         clsbd2 = self.infer_clsbd(x2)
-        clsbd2 = F.interpolate(clsbd2,scale_factor=2,mode='bilinear',align_corners=False)[...,:unary.shape[-2],:unary.shape[-1]]
+        clsbd2 = F.interpolate(clsbd2,scale_factor=2,mode='bilinear',align_corners=True)[...,:unary.shape[-2],:unary.shape[-1]]
         clsbd2 = torch.sigmoid(flip_add(clsbd2)/2)
         
-        pred = self.convcrf(unary, (clsbd+clsbd2)/2, label, num_iter=20)
+        pred = self.convcrf(unary, (clsbd+clsbd2)/2, label, num_iter=30)
         return pred
 
 

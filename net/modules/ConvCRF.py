@@ -179,7 +179,7 @@ class ClsbdCRF(nn.Module):
 		self.CRF.add_pairwise_energies([clsbd, pos_feats],
 									   compats, is_clsbd_list, conf['merge'])
 
-		prediction = self.CRF.inference(unary, label, num_iter=num_iter)
+		prediction = self.CRF.inference(unary, label, clsbd, num_iter=num_iter)
 
 		self.CRF.clean_filters()
 		return prediction
@@ -304,7 +304,7 @@ class MessagePassingCol():
 				add_gaus(compat*(-torch.log(gaussian+1e-5)),'neg')
 				add_gaus(-compat*torch.log((1.-gaussian)+1e-5),'pos')
 			else:
-				add_gaus(compat*gaussian,'neg')
+				add_gaus(-compat*torch.log(1-gaussian+1e-5),'neg')
 		for k,v in self._gaus_list.items():
 			self._gaus_list[k] = sum(v)
 
@@ -619,7 +619,7 @@ class ConvCRF(nn.Module):
 			blur=self.blur,
 			pyinn=self.pyinn)
 
-	def inference(self, unary, label, num_iter=3):
+	def inference(self, unary, label, clsbd, num_iter=3):
 		N = unary.shape[0]
 		# FIXME: unary must be logits from cam layer. psi_unary = -unary and prediction = softmax(unary)
 		# △ 0 Initialize: Q(i.e. prediction) and psi(i.e. psi_unary)
@@ -634,6 +634,7 @@ class ConvCRF(nn.Module):
 		norm = False
 		for i in range(num_iter):
 			# △ 1 Message passing
+			# import pdb;pdb.set_trace()
 			messages, input_col, pl = self.kernel.compute(prediction, label)
 			_,C,K,_,W,H = input_col.shape
 			# △ 2 Compatibility transform
