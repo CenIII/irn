@@ -145,7 +145,7 @@ class Net(nn.Module):
         # 1. rescale
         # unary_raw = F.interpolate(unary_raw, label.shape[-2:], mode='bilinear', align_corners=False)#[0] #torch.unsqueeze(unary_raw, 0)
         # 2. add background
-        unary_raw = F.pad(unary_raw, (0, 0, 0, 0, 1, 1, 0, 0), mode='constant',value=0.)
+        unary_raw = F.pad(unary_raw, (0, 0, 0, 0, 1, 1, 0, 0), mode='constant',value=1.)
         # 3. create and apply mask
         label[label==255.] = 21
         label = label.unsqueeze(1)
