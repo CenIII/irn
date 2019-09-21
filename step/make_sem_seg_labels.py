@@ -70,7 +70,7 @@ def run(args):
 	cam.eval()
 
 	model = getattr(importlib.import_module(args.irn_network), 'EdgeDisplacement')(cam, infer_conf)
-	model = torchutils.reload_model(model, './exp/original_cam/sess/res50_irn.pth')
+	model = torchutils.reload_model(model, './exp/original_cam/sess/res50_irn_clsbd.pth')
 
 	# model.load_state_dict(torch.load(args.irn_weights_name), strict=False)
 	model.eval()

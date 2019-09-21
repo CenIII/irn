@@ -47,7 +47,7 @@ infer_conf = {
     'weight': 'vector',
     "unary_weight": 1.,
     "weight_init": 0.1,
-    "pos_weight":12.,
+    "pos_weight":5.,
     "neg_weight":1.,
 
     'trainable': False,
@@ -223,12 +223,16 @@ class EdgeDisplacement(Net):
         x1 = x[0].squeeze()
         clsbd = self.infer_clsbd(x1)[...,:unary.shape[-2],:unary.shape[-1]]
         clsbd = torch.sigmoid(flip_add(clsbd)/2)
-        
+        clsbd -= clsbd.min()
+        clsbd /= clsbd.max()
+        # import pdb;pdb.set_trace()
         x2 = x[1].squeeze()
         clsbd2 = self.infer_clsbd(x2)
         clsbd2 = F.interpolate(clsbd2,scale_factor=2,mode='bilinear',align_corners=True)[...,:unary.shape[-2],:unary.shape[-1]]
         clsbd2 = torch.sigmoid(flip_add(clsbd2)/2)
-        
+        clsbd2 -= clsbd2.min()
+        clsbd2 /= clsbd2.max()
+
         pred = self.convcrf(unary, (clsbd+clsbd2)/2, label, num_iter=30)
         return pred
 

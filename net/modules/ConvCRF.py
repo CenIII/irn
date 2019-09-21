@@ -626,10 +626,11 @@ class ConvCRF(nn.Module):
 		# import pdb;pdb.set_trace()
 		psi_unary = - F.log_softmax(unary, dim=1, _stacklevel=5) #- unary
 		# import pdb;pdb.set_trace()
-		divs = torch.clamp(unary.view(21,-1).max(dim=1)[0],1.)[None,:,None,None]
-		prediction = unary/divs
-
-		# prediction = F.softmax(unary, dim=1)
+		if self.training:
+			prediction = F.softmax(unary, dim=1)
+		else:
+			divs = torch.clamp(unary.view(21,-1).max(dim=1)[0],1.)[None,:,None,None]
+			prediction = unary/divs
 
 		norm = False
 		for i in range(num_iter):
@@ -658,7 +659,7 @@ class ConvCRF(nn.Module):
 
 				pos_norm = (pl_pred*input_col).view(N,C,-1).sum(dim=2)[:,:,None,None]
 				pos_norm[:,1:] = pos_norm[:,1:].sum(dim=1,keepdim=True)
-				# pos_norm *= 2.
+				pos_norm *= 2.
 				pos_norm = torch.clamp(pos_norm, 1.).detach()
 				neg_input_col = self.neg_comp(input_col.view(N,C,-1,1)).view(input_col.shape)
 				neg_norm = torch.clamp((pl_pred*neg_input_col).view(N,-1).sum(dim=1)[:,None,None,None],1.).detach()
