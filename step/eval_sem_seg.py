@@ -6,23 +6,42 @@ from chainercv.evaluations import calc_semantic_segmentation_confusion
 import imageio
 import tqdm 
 
+def load_img_name_list(dataset_path):
+
+    img_name_list = np.loadtxt(dataset_path, dtype=np.int32)
+
+    return img_name_list
+def decode_int_filename(int_filename):
+    s = str(int(int_filename))
+    return s[:4] + '_' + s[4:]
+
 def run(args):
     dataset = VOCSemanticSegmentationDataset(split=args.chainer_eval_set, data_dir=args.voc12_root)
     labels = [dataset.get_example_by_keys(i, (1,))[0] for i in range(len(dataset))]
     print(args.sem_seg_out_dir)
     preds = []
     qdar = tqdm.tqdm(dataset.ids,total=len(dataset.ids),ascii=True)
-    cls_stats = np.zeros(21)
+    # cls_stats = np.zeros(21)
+    # id_list = load_img_name_list('voc12/boat.txt')
+    # id_list = [decode_int_filename(id_list[i]) for i in range(len(id_list))]
+    # ind_list = []
+    # cnt = 0
     for id in qdar:
+        # if id in id_list:
+        # ind_list.append(cnt)
         cls_labels = imageio.imread(os.path.join(args.sem_seg_out_dir, id + '.png')).astype(np.uint8)
         cls_labels[cls_labels == 255] = 0
         preds.append(cls_labels.copy())
         keys = np.unique(cls_labels)
-        for k in keys:
-            cls_stats[k] += 1
-
+        # for k in keys:
+        #     cls_stats[k] += 1
+            # if k==4:
+            #     print(id)
+        # cnt+=1
+    # ind_list = np.array(ind_list).astype(np.int32)
+    # import pdb;pdb.set_trace()
     # print("class stats: "+str(cls_stats))
-    confusion = calc_semantic_segmentation_confusion(preds, labels)[:21, :21]
+    confusion = calc_semantic_segmentation_confusion(preds, labels)[:21, :21] #[labels[ind] for ind in ind_list]
 
     gtj = confusion.sum(axis=1)
     resj = confusion.sum(axis=0)
