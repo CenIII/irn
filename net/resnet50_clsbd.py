@@ -6,7 +6,7 @@ from net.modules import ClsbdCRF
 
 # Default config as proposed by Philipp Kraehenbuehl and Vladlen Koltun,
 default_conf = {
-    'filter_size': 19,
+    'filter_size': 21,
     'blur': 1,
     'merge': False,
     'norm': 'none',
@@ -47,7 +47,7 @@ infer_conf = {
     'weight': 'vector',
     "unary_weight": 1.,
     "weight_init": 0.1,
-    "pos_weight":5.,
+    "pos_weight":15.,
     "neg_weight":1.,
 
     'trainable': False,
@@ -58,7 +58,7 @@ infer_conf = {
 
     'pos_feats': {
         'sdims': 30,
-        'compat': 0.7,
+        'compat': 1.,
     },
     'col_feats': {
         # 'sdims': 80,
@@ -76,9 +76,9 @@ infer_conf = {
 
 class Net(nn.Module):
 
-    def __init__(self, cam_net, crf_conf):
+    def __init__(self, crf_conf):
         super(Net, self).__init__()
-        self.cam_net = cam_net
+        # self.cam_net = cam_net
         # backbone
         self.resnet50 = resnet50.resnet50(pretrained=True, strides=[2, 2, 2, 1])
 
@@ -161,25 +161,27 @@ class Net(nn.Module):
         # unary[:,0] = 1.
         return unary 
 
-    def make_unary_for_train(self, unary_raw, label):
+    def make_unary_for_train(self, label):
         # unary_raw [N, 21, W, H]
         # 1. rescale
-        unary_raw = F.interpolate(unary_raw, label.shape[-2:], mode='bilinear', align_corners=False)#[0] #torch.unsqueeze(unary_raw, 0)
-        # 2. add background
-        unary_raw = F.pad(unary_raw, (0, 0, 0, 0, 1, 1, 0, 0), mode='constant',value=1.)
+        # unary_raw = F.interpolate(unary_raw, label.shape[-2:], mode='bilinear', align_corners=False)#[0] #torch.unsqueeze(unary_raw, 0)
+        # # 2. add background
+        # unary_raw = F.pad(unary_raw, (0, 0, 0, 0, 1, 1, 0, 0), mode='constant',value=1.)
         # 3. create and apply mask
         label[label==255.] = 21
         label = label.unsqueeze(1)
-        mask = torch.zeros_like(unary_raw).cuda()
+        N,_,W,H = label.shape
+        mask = torch.zeros(N,22,W,H).cuda()
         mask = mask.scatter_(1,label.type(torch.cuda.LongTensor),1.)
-        unary = (unary_raw * mask)[:,:-1]
+        # unary = (unary_raw * mask)[:,:-1]
+        unary = mask[:,:-1]
         unary[unary>0.] = 100.
         return unary 
 
     def forward(self, x, label):
-        unary_raw = self.cam_net(x)
-        unary_raw = F.relu(unary_raw).detach()
-        unary = self.make_unary_for_train(unary_raw, label)
+        # unary_raw = self.cam_net(x)
+        # unary_raw = F.relu(unary_raw).detach()
+        unary = self.make_unary_for_train(label)
         clsbd = self.infer_clsbd(x)[...,:unary.shape[-2],:unary.shape[-1]]
         clsbd = torch.sigmoid(clsbd)
         pred = self.convcrf(unary, clsbd, label, num_iter=1)
@@ -210,8 +212,8 @@ class Net(nn.Module):
 
 class EdgeDisplacement(Net):
 
-    def __init__(self, cam, crf_conf):
-        super(EdgeDisplacement, self).__init__(cam, crf_conf)
+    def __init__(self, crf_conf):
+        super(EdgeDisplacement, self).__init__(crf_conf)
 
     def forward(self, x, unary, label, out_settings=None):
         def flip_add(inp,keepdim=True):

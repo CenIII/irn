@@ -96,20 +96,20 @@ def run(args):
 
 	path_index = indexing.PathIndex(radius=10, default_size=(args.irn_crop_size // 4, args.irn_crop_size // 4))
 
-	cam = getattr(importlib.import_module(args.cam_network), 'Net')()
-	cam.load_state_dict(torch.load(args.cam_weights_name + '.pth'), strict=True)
-	cam.eval()
+	# cam = getattr(importlib.import_module(args.cam_network), 'Net')()
+	# cam.load_state_dict(torch.load(args.cam_weights_name + '.pth'), strict=True)
+	# cam.eval()
 
-	model = getattr(importlib.import_module(args.irn_network), 'Net')(cam, default_conf)
+	model = getattr(importlib.import_module(args.irn_network), 'Net')(default_conf)
 	# model = torchutils.reload_model(model, './exp/original_cam/sess/res50_irn.pth')
 
-	irn = getattr(importlib.import_module(args.irn_network), 'Net')(cam, default_conf)
+	irn = getattr(importlib.import_module(args.irn_network), 'Net')(default_conf)
 	irn = torchutils.reload_model(irn, './exp/original_cam/sess/res50_irn.pth')
 
 	# model.load_state_dict(torch.load(args.irn_weights_name), strict=False)
 	irn.eval()
 
-	seed = 52
+	seed = 13
 	torch.manual_seed(seed)
 	torch.cuda.manual_seed(seed)
 	torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU.

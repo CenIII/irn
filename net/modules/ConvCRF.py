@@ -247,6 +247,7 @@ def polarness(x, label): #[1, 21, 42, 63]
 		pl = 1. - entropy / np.log(D)
 	else: 
 		pl = 1. - entropy
+	pl[pl<1e-3] = 0.
 	# pl = 1. - x[:,0:1]
 	return pl 
 
@@ -301,8 +302,10 @@ class MessagePassingCol():
 				self._norm_list.append(None)
 			
 			if is_clsbd:
-				add_gaus(compat*(-torch.log(gaussian+1e-5)),'neg')
 				add_gaus(-compat*torch.log((1.-gaussian)+1e-5),'pos')
+				gaussian_neg = gaussian.clone()
+				gaussian_neg[:,:,self.span,self.span] = 1.
+				add_gaus(compat*(-torch.log(gaussian_neg+1e-5)),'neg')
 			else:
 				add_gaus(-compat*torch.log(1-gaussian+1e-5),'neg')
 		for k,v in self._gaus_list.items():
@@ -663,8 +666,6 @@ class ConvCRF(nn.Module):
 				pos_norm = torch.clamp(pos_norm, 1.).detach()
 				neg_input_col = self.neg_comp(input_col.view(N,C,-1,1)).view(input_col.shape)
 				neg_norm = torch.clamp((pl_pred*neg_input_col).view(N,-1).sum(dim=1)[:,None,None,None],1.).detach()
-
-				
 
 				# if self.weight is None:
 				#     prediction = - psi_unary - pos_message - neg_message
