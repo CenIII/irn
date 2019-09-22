@@ -67,21 +67,26 @@ def visualize_all_classes(hms, label, iterno, savepath, origin=0, descr='orig'):
 	plt.savefig(os.path.join(savepath, savename))
 	plt.close()
 
-def compute_loss(crit,pred,label):
-	label = label.type(torch.cuda.LongTensor)
-	N,C,W,H = pred.shape
-	# pred = torch.log(pred + 1e-5)
-	pred_flat = pred.permute(0,2,3,1).contiguous().view(-1,C)
-	label_flat = label.view(-1)
+# def compute_loss(crit,pred,label):
+# 	label = label.type(torch.cuda.LongTensor)
+# 	N,C,W,H = pred.shape
+# 	# pred = torch.log(pred + 1e-5)
+# 	pred_flat = pred.permute(0,2,3,1).contiguous().view(-1,C)
+# 	label_flat = label.view(-1)
 	
-	bg_inds = torch.nonzero(label_flat==0.).squeeze()
-	loss = crit(pred_flat[bg_inds],label_flat[bg_inds])
-	label_flat[label_flat==0.] = 255.
-	fg_inds = torch.nonzero(label_flat<255.).squeeze()
-	# import pdb;pdb.set_trace()
+# 	bg_inds = torch.nonzero(label_flat==0.).squeeze()
+# 	loss = crit(pred_flat[bg_inds],label_flat[bg_inds])
+# 	label_flat[label_flat==0.] = 255.
+# 	fg_inds = torch.nonzero(label_flat<255.).squeeze()
+# 	# import pdb;pdb.set_trace()
 	
-	loss = loss + crit(pred_flat[fg_inds],label_flat[fg_inds])
-	loss = loss / 2.
+# 	loss = loss + crit(pred_flat[fg_inds],label_flat[fg_inds])
+# 	loss = loss / 2.
+# 	return loss
+
+def compute_loss(pred):
+	pos, neg, pos_fg_sum, pos_bg_sum, neg_sum = pred
+	loss = (pos[:,0]/pos_bg_sum.sum()).sum()/4.+(pos[:,1:]/pos_fg_sum.sum()).sum()/4.+(neg/neg_sum.sum()).sum()/2.
 	return loss
 
 def get_grad_norm(parameters, norm_type=2):
@@ -104,7 +109,7 @@ def run(args):
 	# model = torchutils.reload_model(model, './exp/original_cam/sess/res50_irn.pth')
 
 	irn = getattr(importlib.import_module(args.irn_network), 'Net')(default_conf)
-	irn = torchutils.reload_model(irn, './exp/original_cam/sess/res50_irn.pth')
+	irn = torchutils.reload_model(irn, './exp/original_cam/sess/res50_irn_orig.pth')
 
 	# model.load_state_dict(torch.load(args.irn_weights_name), strict=False)
 	irn.eval()
@@ -169,7 +174,7 @@ def run(args):
 			with autograd.detect_anomaly():
 				pred, hms = model(img, label.clone())
 				pred1, hms1 = irn(img[0:1], label.clone()[0:1])
-				hms[-1] = hms1[-2].repeat(img.shape[0],1,1,1)
+				hms.append(hms1[-1].repeat(img.shape[0],1,1,1))
 				# visualization
 				if (optimizer.global_step-1)%20 == 0 and args.cam_visualize_train:
 					visualize(img, model.module, hms, cls_label, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir)
@@ -178,7 +183,8 @@ def run(args):
 				# TODO: masked pixel cross-entropy loss compute. 
 				# import pdb;pdb.set_trace()
 				# loss = compute_loss(crit, pred, label)
-				loss = - pred.sum()/pred.shape[0]
+				loss = compute_loss(pred)
+				# loss = - pred.sum()/pred.shape[0]
 				
 				avg_meter.add({'loss': loss})
 

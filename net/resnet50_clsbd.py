@@ -185,7 +185,7 @@ class Net(nn.Module):
         clsbd = self.infer_clsbd(x)[...,:unary.shape[-2],:unary.shape[-1]]
         clsbd = torch.sigmoid(clsbd)
         pred = self.convcrf(unary, clsbd, label, num_iter=1)
-        hms = self.save_hm(unary,clsbd.repeat(1,21,1,1),pred)
+        hms = self.save_hm(unary,clsbd.repeat(1,21,1,1))
         return pred, hms
 
     def getHeatmaps(self, hms, classid):

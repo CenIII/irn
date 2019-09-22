@@ -379,7 +379,7 @@ class MessagePassingCol():
 			cols = cols.view(bs, self.filter_size, self.filter_size, npixels[0], npixels[1]) #[1, 7, 7, 86, 125]
 			# 2. for i in range(span), fill gaussian
 			tmp_arr = cols.data.new(bs,8,npixels[0], npixels[1]).fill_(0)
-
+			tmp_arr = tmp_arr + cols[:,self.span,self.span][:,None]
 			for i in range(1,span+1):
 				# extract ith circle [1,i*8,86,125] from cols
 				ii, jj = self._get_circle_inds(span,i)
@@ -631,6 +631,8 @@ class ConvCRF(nn.Module):
 		# import pdb;pdb.set_trace()
 		if self.training:
 			prediction = F.softmax(unary, dim=1)
+			prediction[prediction>0.5] = 1.
+			prediction[prediction<=0.5] = 0.
 		else:
 			divs = torch.clamp(unary.view(21,-1).max(dim=1)[0],1.)[None,:,None,None]
 			prediction = unary/divs
@@ -661,19 +663,20 @@ class ConvCRF(nn.Module):
 				pl_pred = (prediction*pl)[:,:,None,None].detach()
 
 				pos_norm = (pl_pred*input_col).view(N,C,-1).sum(dim=2)[:,:,None,None]
-				pos_norm[:,1:] = pos_norm[:,1:].sum(dim=1,keepdim=True)
-				pos_norm *= 2.
-				pos_norm = torch.clamp(pos_norm, 1.).detach()
+				pos_bg_sum = pos_norm[:,0].sum()
+				pos_fg_sum = pos_norm[:,1:].sum()
+				# pos_norm *= 4.
+				# pos_norm = torch.clamp(pos_norm, 1.).detach()
 				neg_input_col = self.neg_comp(input_col.view(N,C,-1,1)).view(input_col.shape)
-				neg_norm = torch.clamp((pl_pred*neg_input_col).view(N,-1).sum(dim=1)[:,None,None,None],1.).detach()
+				neg_sum = (pl_pred*neg_input_col).sum()
 
 				# if self.weight is None:
 				#     prediction = - psi_unary - pos_message - neg_message
 				# else:
 				# import pdb;pdb.set_trace()
-				prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * (self.pos_weight*pos_message/pos_norm + self.neg_weight*neg_message/neg_norm)
-				prediction = (prediction*pl_pred.squeeze())#.view(N,-1).sum(dim=1)
-				return prediction
+				# prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * (self.pos_weight*pos_message/pos_norm + self.neg_weight*neg_message/neg_norm)
+				# prediction = (prediction*pl_pred.squeeze())#.view(N,-1).sum(dim=1)
+				return pos_message*pl_pred.squeeze(), neg_message*pl_pred.squeeze(), pos_fg_sum, pos_bg_sum, neg_sum
 			prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * (self.pos_weight*pos_message + self.neg_weight*neg_message)
 			prediction = F.softmax(prediction, dim=1)
 			# if not i == num_iter - 1 or self.final_softmax:
