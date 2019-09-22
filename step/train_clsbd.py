@@ -86,7 +86,7 @@ def visualize_all_classes(hms, label, iterno, savepath, origin=0, descr='orig'):
 
 def compute_loss(pred):
 	pos, neg, pos_fg_sum, pos_bg_sum, neg_sum = pred
-	loss = (pos[:,0]/pos_bg_sum.sum()).sum()/4.+(pos[:,1:]/pos_fg_sum.sum()).sum()/4.+(neg/neg_sum.sum()).sum()/2.
+	loss = (pos[:,0]/pos_bg_sum.sum()).sum()/6.+(pos[:,1:]/pos_fg_sum.sum()).sum()/3.+(neg/neg_sum.sum()).sum()/2.
 	return loss
 
 def get_grad_norm(parameters, norm_type=2):
@@ -109,7 +109,7 @@ def run(args):
 	# model = torchutils.reload_model(model, './exp/original_cam/sess/res50_irn.pth')
 
 	irn = getattr(importlib.import_module(args.irn_network), 'Net')(default_conf)
-	irn = torchutils.reload_model(irn, './exp/original_cam/sess/res50_irn_orig.pth')
+	irn = torchutils.reload_model(irn, './exp/original_cam/sess/res50_irn.pth')
 
 	# model.load_state_dict(torch.load(args.irn_weights_name), strict=False)
 	irn.eval()
@@ -209,5 +209,5 @@ def run(args):
 		else:
 			timer.reset_stage()
 
-	torch.save(model.state_dict(), args.irn_weights_name)
+	torch.save(model.module.state_dict(), args.irn_weights_name)
 	torch.cuda.empty_cache()

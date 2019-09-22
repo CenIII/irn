@@ -86,6 +86,8 @@ def reload_model(model, path):
 	# 1. filter out unnecessary keys
 	pretrained_dict = {}
 	for k, v in checkpoint.items():
+		if 'module' in k:
+			k = k[7:]
 		if(k in model_dict):
 			pretrained_dict[k] = v
 	# 2. overwrite entries in the existing state dict

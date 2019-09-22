@@ -6,7 +6,7 @@ from net.modules import ClsbdCRF
 
 # Default config as proposed by Philipp Kraehenbuehl and Vladlen Koltun,
 default_conf = {
-    'filter_size': 21,
+    'filter_size': 19,
     'blur': 1,
     'merge': False,
     'norm': 'none',
@@ -57,8 +57,8 @@ infer_conf = {
     'final_softmax': False,
 
     'pos_feats': {
-        'sdims': 30,
-        'compat': 1.,
+        'sdims': 50,
+        'compat': 0.8,
     },
     'col_feats': {
         # 'sdims': 80,
@@ -228,10 +228,11 @@ class EdgeDisplacement(Net):
 
         x2 = x[1].squeeze()
         clsbd2 = self.infer_clsbd(x2)
-        clsbd2 = F.interpolate(clsbd2,scale_factor=2,mode='bilinear',align_corners=True)[...,:unary.shape[-2],:unary.shape[-1]]
+        clsbd2 = F.interpolate(clsbd2,scale_factor=1/1.48,mode='bilinear',align_corners=True)[...,:unary.shape[-2],:unary.shape[-1]]
         clsbd2 = torch.sigmoid(flip_add(clsbd2)/2)
 
-        pred = self.convcrf(unary, (clsbd+clsbd2)/2, label, num_iter=30)
-        return pred
+        clsbd = (clsbd+clsbd2)/2
+        pred = self.convcrf(unary, clsbd, label, num_iter=30)
+        return pred, clsbd
 
 
