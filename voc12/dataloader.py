@@ -298,7 +298,7 @@ class VOC12AffinityDataset(VOC12SegmentationDataset):
                  rescale=None, img_normal=TorchvisionNormalize(), hor_flip=False, crop_method=None):
         super().__init__(img_name_list_path, label_dir, crop_size, voc12_root, rescale, img_normal, hor_flip, crop_method=crop_method)
 
-        self.extract_aff_lab_func = GetAffinityLabelFromIndices(indices_from, indices_to)
+        # self.extract_aff_lab_func = GetAffinityLabelFromIndices(indices_from, indices_to)
 
     def __len__(self):
         return len(self.img_name_list)

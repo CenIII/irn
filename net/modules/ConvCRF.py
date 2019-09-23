@@ -172,13 +172,18 @@ class ClsbdCRF(nn.Module):
 
 		bs, c, x, y = clsbd.shape
 		
-		pos_feats = self.create_position_feats(clsbd.shape[-2:], sdims=self.pos_sdims, bs=bs)
+		if not self.training:
+			pos_feats = self.create_position_feats(clsbd.shape[-2:], sdims=self.pos_sdims, bs=bs)
+			feat_list = [clsbd, pos_feats]
+			compat_list = [self.col_compat,self.pos_compat]
+			is_clsbd_list = [True, False]
+		else:
+			feat_list = [clsbd]
+			compat_list = [self.col_compat]
+			is_clsbd_list = [True]
 
-		compats = [self.col_compat,self.pos_compat]
-		is_clsbd_list = [True, False]
-		
-		self.CRF.add_pairwise_energies([clsbd, pos_feats],
-									   compats, is_clsbd_list, conf['merge'])
+		self.CRF.add_pairwise_energies(feat_list,
+									   compat_list, is_clsbd_list, conf['merge'])
 
 		prediction = self.CRF.inference(unary, label, clsbd, num_iter=num_iter)
 
@@ -699,15 +704,16 @@ class ConvCRF(nn.Module):
 			# △ 3 Local Update (and normalize)
 			# import pdb;pdb.set_trace()
 			if self.training:
-				pl_pred = (prediction*pl)[:,:,None,None].detach()
+				pl_pred = (prediction*pl)[:,:,None,None]
 
 				pos_norm = (pl_pred*input_col).view(N,C,-1).sum(dim=2)[:,:,None,None]
-				pos_bg_sum = pos_norm[:,0].sum()
-				pos_fg_sum = pos_norm[:,1:].sum()
+				pos_bg_sum = pos_norm[:,0].sum().detach()
+				pos_fg_sum = pos_norm[:,1:].sum().detach()
 				# pos_norm *= 4.
 				# pos_norm = torch.clamp(pos_norm, 1.).detach()
 				neg_input_col = self.neg_comp(input_col.view(N,C,-1,1)).view(input_col.shape)
-				neg_sum = (pl_pred*neg_input_col).sum()
+				# import pdb;pdb.set_trace()
+				neg_sum = (pl_pred*neg_input_col).sum().detach()
 
 				# if self.weight is None:
 				#     prediction = - psi_unary - pos_message - neg_message

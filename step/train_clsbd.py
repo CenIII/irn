@@ -99,7 +99,7 @@ def get_grad_norm(parameters, norm_type=2):
 
 def run(args):
 
-	path_index = indexing.PathIndex(radius=10, default_size=(args.irn_crop_size // 4, args.irn_crop_size // 4))
+	# path_index = indexing.PathIndex(radius=10, default_size=(args.irn_crop_size // 4, args.irn_crop_size // 4))
 
 	# cam = getattr(importlib.import_module(args.cam_network), 'Net')()
 	# cam.load_state_dict(torch.load(args.cam_weights_name + '.pth'), strict=True)
@@ -114,7 +114,7 @@ def run(args):
 	# model.load_state_dict(torch.load(args.irn_weights_name), strict=False)
 	irn.eval()
 
-	seed = 13
+	seed = 25
 	torch.manual_seed(seed)
 	torch.cuda.manual_seed(seed)
 	torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU.
@@ -129,8 +129,8 @@ def run(args):
 	train_dataset = voc12.dataloader.VOC12AffinityDataset(args.train_list,
 														  label_dir=args.ir_label_out_dir,
 														  voc12_root=args.voc12_root,
-														  indices_from=path_index.default_src_indices,
-														  indices_to=path_index.default_dst_indices,
+														  indices_from=None,#path_index.default_src_indices,
+														  indices_to=None,#path_index.default_dst_indices,
 														  hor_flip=True,
 														  crop_size=args.irn_crop_size,
 														  crop_method="random",
@@ -155,7 +155,6 @@ def run(args):
 
 	timer = pyutils.Timer()
 	
-	crit = nn.NLLLoss()
 	cb = [None, None, None, None]
 	img_denorm = torchutils.ImageDenorm()
 
@@ -171,31 +170,29 @@ def run(args):
 			# fg_pos_label = pack['aff_fg_pos_label'].cuda(non_blocking=True)
 			# neg_label = pack['aff_neg_label'].cuda(non_blocking=True)
 			# import pdb;pdb.set_trace()
-			with autograd.detect_anomaly():
-				pred, hms = model(img, label.clone())
-				pred1, hms1 = irn(img[0:1], label.clone()[0:1])
-				hms.append(hms1[-1].repeat(img.shape[0],1,1,1))
-				# visualization
-				if (optimizer.global_step-1)%20 == 0 and args.cam_visualize_train:
-					visualize(img, model.module, hms, cls_label, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir)
-					# visualize_all_classes(hms, cls_label, optimizer.global_step-1, args.vis_out_dir, origin=0, descr='unary')
-					# visualize_all_classes(hms, cls_label, optimizer.global_step-1, args.vis_out_dir, origin=2, descr='convcrf')
-				# TODO: masked pixel cross-entropy loss compute. 
-				# import pdb;pdb.set_trace()
-				# loss = compute_loss(crit, pred, label)
-				loss = compute_loss(pred)
-				# loss = - pred.sum()/pred.shape[0]
-				
-				avg_meter.add({'loss': loss})
-
-				# total_loss = (pos_aff_loss + neg_aff_loss)/2 + (dp_fg_loss + dp_bg_loss)/2
+		
+			pred, hms = model(img, label.clone())
+			pred1, hms1 = irn(img[0:1], label.clone()[0:1])
+			hms.append(hms1[-1].repeat(img.shape[0],1,1,1))
+			# visualization
+			if (optimizer.global_step-1)%20 == 0 and args.cam_visualize_train:
+				visualize(img, model.module, hms, cls_label, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir)
+				# visualize_all_classes(hms, cls_label, optimizer.global_step-1, args.vis_out_dir, origin=0, descr='unary')
+				# visualize_all_classes(hms, cls_label, optimizer.global_step-1, args.vis_out_dir, origin=2, descr='convcrf')
+			# loss = compute_loss(crit, pred, label)
+			loss = compute_loss(pred)
+			# loss = - pred.sum()/pred.shape[0]
 			
-				optimizer.zero_grad()
-				loss.backward()
-				# grad_norm = get_grad_norm(param_groups)
-				# clip_grad_norm_(model.parameters(), 2.)
-				# import pdb;pdb.set_trace()
-				optimizer.step()
+			avg_meter.add({'loss': loss})
+
+			# total_loss = (pos_aff_loss + neg_aff_loss)/2 + (dp_fg_loss + dp_bg_loss)/2
+		
+			optimizer.zero_grad()
+			loss.backward()
+			# grad_norm = get_grad_norm(param_groups)
+			# clip_grad_norm_(model.parameters(), 2.)
+			# import pdb;pdb.set_trace()
+			optimizer.step()
 
 			if (optimizer.global_step-1)%100 == 0:
 				timer.update_progress(optimizer.global_step / max_step)
@@ -208,6 +205,6 @@ def run(args):
 					'etc:%s' % (timer.str_estimated_complete()), flush=True)
 		else:
 			timer.reset_stage()
-
+		torch.cuda.empty_cache()
 	torch.save(model.module.state_dict(), args.irn_weights_name)
 	torch.cuda.empty_cache()
