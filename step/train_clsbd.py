@@ -86,7 +86,7 @@ def visualize_all_classes(hms, label, iterno, savepath, origin=0, descr='orig'):
 
 def compute_loss(pred):
 	pos, neg, pos_fg_sum, pos_bg_sum, neg_sum = pred
-	loss = (pos[:,0]/pos_bg_sum.sum()).sum()/6.+(pos[:,1:]/pos_fg_sum.sum()).sum()/3.+(neg/neg_sum.sum()).sum()/2.
+	loss = (pos[:,0]/pos_bg_sum.sum()).sum()/4.+(pos[:,1:]/pos_fg_sum.sum()).sum()/4.+(neg/neg_sum.sum()).sum()/2.
 	return loss
 
 def get_grad_norm(parameters, norm_type=2):
@@ -178,8 +178,8 @@ def run(args):
 				# visualization
 				if (optimizer.global_step-1)%20 == 0 and args.cam_visualize_train:
 					visualize(img, model.module, hms, cls_label, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir)
-					visualize_all_classes(hms, cls_label, optimizer.global_step-1, args.vis_out_dir, origin=0, descr='unary')
-					visualize_all_classes(hms, cls_label, optimizer.global_step-1, args.vis_out_dir, origin=2, descr='convcrf')
+					# visualize_all_classes(hms, cls_label, optimizer.global_step-1, args.vis_out_dir, origin=0, descr='unary')
+					# visualize_all_classes(hms, cls_label, optimizer.global_step-1, args.vis_out_dir, origin=2, descr='convcrf')
 				# TODO: masked pixel cross-entropy loss compute. 
 				# import pdb;pdb.set_trace()
 				# loss = compute_loss(crit, pred, label)
@@ -197,7 +197,7 @@ def run(args):
 				# import pdb;pdb.set_trace()
 				optimizer.step()
 
-			if (optimizer.global_step-1)%100 == 0:
+			if (optimizer.global_step-1)%20 == 0:
 				timer.update_progress(optimizer.global_step / max_step)
 
 				print('step:%5d/%5d' % (optimizer.global_step - 1, max_step),

@@ -43,6 +43,7 @@ import torch.nn.functional as F
 
 import gc
 
+from misc.indexing import PathIndexClsbd
 
 # Default config as proposed by Philipp Kraehenbuehl and Vladlen Koltun,
 default_conf = {
@@ -260,7 +261,7 @@ class MessagePassingCol():
 	def __init__(self, feat_list, compat_list, is_clsbd_list, merge, npixels, nclasses,
 				 norm="sym",
 				 filter_size=5, clip_edges=0, use_gpu=False,
-				 blur=1, matmul=False, verbose=False, pyinn=False):
+				 blur=1, matmul=False, verbose=False, pyinn=False, kernel_paths=None):
 
 		assert(use_gpu)
 
@@ -287,6 +288,8 @@ class MessagePassingCol():
 
 		self._gaus_list = {}
 		self._norm_list = []
+
+		self.kernel_paths = kernel_paths
 
 		def add_gaus(gaus,key):
 			tmp = self._gaus_list.setdefault(key,[])
@@ -338,6 +341,28 @@ class MessagePassingCol():
 		tmp_arr2 = tmp_arr[:,inds2]
 		tmp_arr = torch.max(tmp_arr1,tmp_arr2)
 		return tmp_arr
+	
+	def update_max_for_circle(self, cols, cid):  #[2, 19, 19, 128, 128]
+		# TODO: implements this.
+		# import pdb;pdb.set_trace()
+		N,K,_,W,H = cols.shape
+		# Goal: obtain max for cid's circle.
+		# 1. obtain a tensor of size [N,8*cid,2*cid,W,H]
+		# 1.1. get circle inds
+		ii,jj = self._get_circle_inds(self.span,cid)
+		# import pdb;pdb.set_trace()
+		# 1.2. get *predefined* kernel path by every circle ind
+		circ_paths = self.kernel_paths[ii,jj]  #[24, 28, 2]
+		paths_flat = circ_paths.view(-1,2)
+		# 1.4. get all elements by paths
+		# 1.5. view to target tensor. 
+		elems = cols[:,paths_flat[:,0],paths_flat[:,1]].view(N,circ_paths.shape[0],circ_paths.shape[1],W,H)
+		# 2. max dim=2
+		circ_maxs = elems.max(dim=2)[0]
+
+		update = cols.data.new(cols.shape).fill_(0.)
+		update[:,ii,jj] = circ_maxs
+		return update  #[N,8*cid,W,H]
 
 	def _create_convolutional_filters(self, features, is_clsbd):
 
@@ -378,22 +403,26 @@ class MessagePassingCol():
 			cols = F.unfold(features, self.filter_size, 1, self.span)
 			cols = cols.view(bs, self.filter_size, self.filter_size, npixels[0], npixels[1]) #[1, 7, 7, 86, 125]
 			# 2. for i in range(span), fill gaussian
-			tmp_arr = cols.data.new(bs,8,npixels[0], npixels[1]).fill_(0)
-			tmp_arr = tmp_arr + cols[:,self.span,self.span][:,None]
+			# tmp_arr = cols.data.new(bs,8,npixels[0], npixels[1]).fill_(0)
+			# tmp_arr = tmp_arr + cols[:,self.span,self.span][:,None]
 			for i in range(1,span+1):
-				# extract ith circle [1,i*8,86,125] from cols
-				ii, jj = self._get_circle_inds(span,i)
-				src_arr = cols[:,ii,jj]
-				# compare with tmp_arr, max to obtain new tmp_arr
-				tmp_arr = torch.max(src_arr,tmp_arr)
-				# assign tmp_arr to ith circle of gaussian
-				update = gaussian.data.new(gaussian.shape).fill_(0.)
-				update[:,ii,jj] = tmp_arr
+
+
+				# # extract ith circle [1,i*8,86,125] from cols
+				# ii, jj = self._get_circle_inds(span,i)
+				# src_arr = cols[:,ii,jj]
+				# # compare with tmp_arr, max to obtain new tmp_arr
+				# tmp_arr = torch.max(src_arr,tmp_arr)
+
+				update = self.update_max_for_circle(cols,i)
 				gaussian = gaussian + update
-				# gaussian[:,ii,jj] += tmp_arr
+
+				# assign tmp_arr to ith circle of gaussian
+				
+
 				# expand tmp_arr via index selection
-				tmp_arr = self._expand_circle(tmp_arr,span,i)
-				# Question: gaussian center element? 
+				# tmp_arr = self._expand_circle(tmp_arr,span,i)
+				
 			# gaussian = 1. - gaussian
 			gaussian[:,span,span] = 0.
 		else:
@@ -597,13 +626,15 @@ class ConvCRF(nn.Module):
 		self.neg_comp.weight.data = torch.ones_like(self.neg_comp.weight.data)
 		for i in range(self.nclasses):
 			self.neg_comp.weight.data[i,i] = 0.
+		self.path_index = PathIndexClsbd(radius=int((filter_size+1)/2))
+		self.kernel_paths_mat = self.path_index.path_index_to_tensor().type(torch.cuda.LongTensor)
 
 	def clean_filters(self):
 		self.kernel = None
 
 	def add_pairwise_energies(self, feat_list, compat_list, is_clsbd_list, merge):
 		assert(len(feat_list) == len(compat_list))
-
+		
 		assert(self.use_gpu)
 		
 		npixels = feat_list[0].shape[-2:]
@@ -620,7 +651,8 @@ class ConvCRF(nn.Module):
 			norm=self.norm,
 			verbose=self.verbose,
 			blur=self.blur,
-			pyinn=self.pyinn)
+			pyinn=self.pyinn,
+			kernel_paths=self.kernel_paths_mat)
 
 	def inference(self, unary, label, clsbd, num_iter=3):
 		N = unary.shape[0]
