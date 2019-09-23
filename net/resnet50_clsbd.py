@@ -228,7 +228,7 @@ class EdgeDisplacement(Net):
 
         x2 = x[1].squeeze()
         clsbd2 = self.infer_clsbd(x2)
-        clsbd2 = F.interpolate(clsbd2,scale_factor=1/1.48,mode='bilinear',align_corners=True)[...,:unary.shape[-2],:unary.shape[-1]]
+        clsbd2 = F.interpolate(clsbd2,scale_factor=2.,mode='bilinear',align_corners=True)[...,:unary.shape[-2],:unary.shape[-1]]
         clsbd2 = torch.sigmoid(flip_add(clsbd2)/2)
 
         clsbd = (clsbd+clsbd2)/2

@@ -67,7 +67,7 @@ def _work(process_id, model, dataset, args, quick=False):
 def run(args):
 	# model = getattr(importlib.import_module(args.irn_network), 'EdgeDisplacement')()
 	model = getattr(importlib.import_module(args.irn_network), 'EdgeDisplacement')(infer_conf)
-	model = torchutils.reload_model(model, './exp/original_cam/sess/res50_irn_clsbd.pth')
+	model = torchutils.reload_model(model, './exp/original_cam/sess/res50_irn.pth')
 
 	# model.load_state_dict(torch.load(args.irn_weights_name), strict=False)
 	model.eval()
@@ -79,14 +79,14 @@ def run(args):
 															 label_dir=args.ir_label_out_dir,
 															 unary_dir=args.unary_out_dir,
 															 voc12_root=args.voc12_root,
-															 scales=(1.0,1.5))
+															 scales=(1.0,0.5))
 		_work(0,model,dataset,args,quick=True)
 	else:
 		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF_Clsbd(args.infer_list,
 															 label_dir=args.ir_label_out_dir,
 															 unary_dir=args.unary_out_dir,
 															 voc12_root=args.voc12_root,
-															 scales=(1.0,1.5))
+															 scales=(1.0,0.5))
 		dataset = torchutils.split_dataset(dataset, n_gpus)
 
 		# print("[", end='')

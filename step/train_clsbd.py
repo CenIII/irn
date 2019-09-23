@@ -197,7 +197,7 @@ def run(args):
 				# import pdb;pdb.set_trace()
 				optimizer.step()
 
-			if (optimizer.global_step-1)%20 == 0:
+			if (optimizer.global_step-1)%100 == 0:
 				timer.update_progress(optimizer.global_step / max_step)
 
 				print('step:%5d/%5d' % (optimizer.global_step - 1, max_step),
