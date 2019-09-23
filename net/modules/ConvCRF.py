@@ -261,7 +261,7 @@ class MessagePassingCol():
 	def __init__(self, feat_list, compat_list, is_clsbd_list, merge, npixels, nclasses,
 				 norm="sym",
 				 filter_size=5, clip_edges=0, use_gpu=False,
-				 blur=1, matmul=False, verbose=False, pyinn=False, kernel_paths=None):
+				 blur=1, matmul=False, verbose=False, pyinn=False, kernel_paths=None, kp_mask=None):
 
 		assert(use_gpu)
 
@@ -290,6 +290,7 @@ class MessagePassingCol():
 		self._norm_list = []
 
 		self.kernel_paths = kernel_paths
+		self.kp_mask = torch.from_numpy(kp_mask[None,None,:,:,None,None]).type(torch.cuda.FloatTensor)
 
 		def add_gaus(gaus,key):
 			tmp = self._gaus_list.setdefault(key,[])
@@ -514,6 +515,8 @@ class MessagePassingCol():
 		if self.verbose:
 			show_memusage(name="Product")
 
+		# import pdb;pdb.set_trace()
+		product = product*self.kp_mask
 		product = product.view([bs, num_channels,
 								k_sqr, input_col.shape[-2], input_col.shape[-1]])
 
@@ -627,7 +630,9 @@ class ConvCRF(nn.Module):
 		for i in range(self.nclasses):
 			self.neg_comp.weight.data[i,i] = 0.
 		self.path_index = PathIndexClsbd(radius=int((filter_size+1)/2))
-		self.kernel_paths_mat = self.path_index.path_index_to_tensor().type(torch.cuda.LongTensor)
+		self.kernel_paths_mat, self.kp_mask = self.path_index.path_index_to_tensor(training=self.training)
+		self.kernel_paths_mat = self.kernel_paths_mat.type(torch.cuda.LongTensor)
+		# self.kp_mask = self.kp_mask.type(torch.cuda.FloatTensor)
 
 	def clean_filters(self):
 		self.kernel = None
@@ -652,7 +657,8 @@ class ConvCRF(nn.Module):
 			verbose=self.verbose,
 			blur=self.blur,
 			pyinn=self.pyinn,
-			kernel_paths=self.kernel_paths_mat)
+			kernel_paths=self.kernel_paths_mat,
+			kp_mask=self.kp_mask)
 
 	def inference(self, unary, label, clsbd, num_iter=3):
 		N = unary.shape[0]
@@ -675,6 +681,7 @@ class ConvCRF(nn.Module):
 			# import pdb;pdb.set_trace()
 			messages, input_col, pl = self.kernel.compute(prediction, label)
 			_,C,K,_,W,H = input_col.shape
+			input_col = input_col*self.kernel.kp_mask
 			# △ 2 Compatibility transform
 			# mle setting
 			# message normalize over polarized points, kernel wise.

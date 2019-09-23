@@ -55,12 +55,18 @@ class PathIndexClsbd:
 
 		return path_list_by_length, path_destinations, max_len
 	
-	def path_index_to_tensor(self):
+	def path_index_to_tensor(self, training=False):
 		# max_len = len(self.path_list_by_length)
 		H = int(self.radius*2-1)
+		R = self.radius - 1
 		kernel_paths = torch.zeros(H,H,self.max_path_len,2)+self.radius-1
 		# import pdb;pdb.set_trace()
-		remove_origin = True
+		mask = np.zeros([H,H])
+		for y in range(0, H):
+			for x in range(0, H):
+				if (y-R)**2 + (x-R)**2 <= R**2:
+					mask[x,y] = 1.
+
 		for l in range(len(self.path_list_by_length)):
 			path_list = self.path_list_by_length[l]
 			for path in path_list:
@@ -69,10 +75,10 @@ class PathIndexClsbd:
 				for pt in path:
 					kernel_paths[dst[0]+self.radius-1 ,dst[1]+self.radius-1,cnt] = torch.from_numpy(pt+self.radius-1).type(torch.FloatTensor)
 					cnt += 1
-				if remove_origin:
+				if not training:
 					for i in range(cnt-1,self.max_path_len):
 						kernel_paths[dst[0]+self.radius-1 ,dst[1]+self.radius-1,i] = torch.from_numpy(dst+self.radius-1).type(torch.FloatTensor)
-		return kernel_paths  # [19,19,24,2]
+		return kernel_paths, mask  # [19,19,24,2]
 	
 
 class PathIndex:
