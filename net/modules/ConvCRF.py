@@ -704,16 +704,14 @@ class ConvCRF(nn.Module):
 			# △ 3 Local Update (and normalize)
 			# import pdb;pdb.set_trace()
 			if self.training:
-				pl_pred = (prediction*pl)[:,:,None,None]
 
-				pos_norm = (pl_pred*input_col).view(N,C,-1).sum(dim=2)[:,:,None,None]
-				pos_bg_sum = pos_norm[:,0].sum().detach()
-				pos_fg_sum = pos_norm[:,1:].sum().detach()
-				# pos_norm *= 4.
-				# pos_norm = torch.clamp(pos_norm, 1.).detach()
-				neg_input_col = self.neg_comp(input_col.view(N,C,-1,1)).view(input_col.shape)
-				# import pdb;pdb.set_trace()
-				neg_sum = (pl_pred*neg_input_col).sum().detach()
+				pl_pred = (prediction*pl)
+
+				pos_norm = pl_pred*input_col.view(N,C,-1,W,H).sum(dim=2)
+				pos_bg_sum = torch.clamp(pos_norm[:,0].sum().detach(),1.)
+				pos_fg_sum = torch.clamp(pos_norm[:,1:].sum().detach(),1.)
+				neg_input_col = self.neg_comp(input_col.view(N,C,-1,1)).view(input_col.shape).view(N,C,-1,W,H).sum(dim=2)
+				neg_sum = torch.clamp((pl_pred*neg_input_col).sum().detach(),1.)
 
 				# if self.weight is None:
 				#     prediction = - psi_unary - pos_message - neg_message
@@ -721,7 +719,7 @@ class ConvCRF(nn.Module):
 				# import pdb;pdb.set_trace()
 				# prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * (self.pos_weight*pos_message/pos_norm + self.neg_weight*neg_message/neg_norm)
 				# prediction = (prediction*pl_pred.squeeze())#.view(N,-1).sum(dim=1)
-				return pos_message*pl_pred.squeeze(), neg_message*pl_pred.squeeze(), pos_fg_sum, pos_bg_sum, neg_sum
+				return pos_message*pl_pred, neg_message*pl_pred, pos_fg_sum, pos_bg_sum, neg_sum
 			prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * (self.pos_weight*pos_message + self.neg_weight*neg_message)
 			prediction = F.softmax(prediction, dim=1)
 			# if not i == num_iter - 1 or self.final_softmax:
