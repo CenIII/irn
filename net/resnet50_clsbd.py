@@ -47,7 +47,7 @@ infer_conf = {
     'weight': 'vector',
     "unary_weight": 1.,
     "weight_init": 0.1,
-    "pos_weight":15.,
+    "pos_weight":7.,
     "neg_weight":1.,
 
     'trainable': False,
@@ -58,7 +58,7 @@ infer_conf = {
 
     'pos_feats': {
         'sdims': 50,
-        'compat': 0.8,
+        'compat': 0.6,
     },
     'col_feats': {
         # 'sdims': 80,
@@ -232,7 +232,7 @@ class EdgeDisplacement(Net):
         clsbd2 = torch.sigmoid(flip_add(clsbd2)/2)
 
         clsbd = (clsbd+clsbd2)/2
-        pred = self.convcrf(unary, clsbd, label, num_iter=30)
+        pred = self.convcrf(unary, clsbd, label, num_iter=100)
         return pred, clsbd
 
 

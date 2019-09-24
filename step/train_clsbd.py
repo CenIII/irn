@@ -86,7 +86,7 @@ def visualize_all_classes(hms, label, iterno, savepath, origin=0, descr='orig'):
 
 def compute_loss(pred):
 	pos, neg, pos_fg_sum, pos_bg_sum, neg_sum = pred
-	loss = (pos[:,0]/pos_bg_sum.sum()).sum()/4.+(pos[:,1:]/pos_fg_sum.sum()).sum()/4.+(neg/neg_sum.sum()).sum()/2.
+	loss = (pos[:,0]/pos_bg_sum.sum()).sum()/6.+(pos[:,1:]/pos_fg_sum.sum()).sum()/3.+(neg/neg_sum.sum()).sum()/2.
 	return loss
 
 def get_grad_norm(parameters, norm_type=2):
@@ -114,17 +114,17 @@ def run(args):
 	# model.load_state_dict(torch.load(args.irn_weights_name), strict=False)
 	irn.eval()
 
-	seed = 25
-	torch.manual_seed(seed)
-	torch.cuda.manual_seed(seed)
-	torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU.
-	np.random.seed(seed)  # Numpy module.
-	random.seed(seed)  # Python random module.
-	torch.manual_seed(seed)
-	torch.backends.cudnn.benchmark = False
-	torch.backends.cudnn.deterministic = True
-	def _init_fn(worker_id):
-		np.random.seed(int(seed))
+	# seed = 25
+	# torch.manual_seed(seed)
+	# torch.cuda.manual_seed(seed)
+	# torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU.
+	# np.random.seed(seed)  # Numpy module.
+	# random.seed(seed)  # Python random module.
+	# torch.manual_seed(seed)
+	# torch.backends.cudnn.benchmark = False
+	# torch.backends.cudnn.deterministic = True
+	# def _init_fn(worker_id):
+	# 	np.random.seed(int(seed))
 
 	train_dataset = voc12.dataloader.VOC12AffinityDataset(args.train_list,
 														  label_dir=args.ir_label_out_dir,
@@ -137,7 +137,7 @@ def run(args):
 														  rescale=(0.5, 1.5)
 														  )
 	train_data_loader = DataLoader(train_dataset, batch_size=args.irn_batch_size,
-								   shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=True, worker_init_fn=_init_fn)
+								   shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=True)#, worker_init_fn=_init_fn)
 
 	max_step = (len(train_dataset) // args.irn_batch_size) * args.irn_num_epoches
 
