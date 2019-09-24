@@ -117,12 +117,35 @@ class Net(nn.Module):
             nn.Upsample(scale_factor=4, mode='bilinear', align_corners=False),
             nn.ReLU(inplace=True),
         )
+        self.fc_edge1_m = nn.Sequential(
+            nn.Conv2d(64, 32, 7, padding=3, bias=False),
+            nn.GroupNorm(4, 32),
+            nn.ReLU(inplace=True),
+        )
+        self.fc_edge2_m = nn.Sequential(
+            nn.Conv2d(256, 32, 5, padding=2, bias=False),
+            nn.GroupNorm(4, 32),
+            nn.ReLU(inplace=True),
+        )
+        self.fc_edge3_m = nn.Sequential(
+            nn.Conv2d(512, 32, 3, padding=1, bias=False),
+            nn.GroupNorm(4, 32),
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+            nn.ReLU(inplace=True),
+        )
+        self.fc_edge4_m = nn.Sequential(
+            nn.Conv2d(1024, 32, 3, padding=1, bias=False),
+            nn.GroupNorm(4, 32),
+            nn.Upsample(scale_factor=4, mode='bilinear', align_corners=False),
+            nn.ReLU(inplace=True),
+        )
         self.fc_edge6 = nn.Conv2d(160, 1, 1, bias=True)
 
         self.convcrf = ClsbdCRF(crf_conf, nclasses=21)
 
         self.backbone = nn.ModuleList([self.stage1, self.stage2, self.stage3, self.stage4, self.stage5])
-        self.edge_layers = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge3, self.fc_edge4, self.fc_edge5, self.fc_edge6])
+        self.edge_layers = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge3, self.fc_edge4, self.fc_edge5, self.fc_edge6,
+                                            self.fc_edge1_m, self.fc_edge2_m, self.fc_edge3_m, self.fc_edge4_m])
 
     def infer_clsbd(self, x): # no sigmoid
         x1 = self.stage1(x).detach()
@@ -132,9 +155,13 @@ class Net(nn.Module):
         x5 = self.stage5(x4).detach()
 
         edge1 = self.fc_edge1(x1)
+        edge1 = edge1 + self.fc_edge1_m(x1)
         edge2 = self.fc_edge2(x2)
+        edge2 = edge2 + self.fc_edge2_m(x2)
         edge3 = self.fc_edge3(x3)[..., :edge2.size(2), :edge2.size(3)]
+        edge3 = edge3 + self.fc_edge3_m(x3)[..., :edge2.size(2), :edge2.size(3)]
         edge4 = self.fc_edge4(x4)[..., :edge2.size(2), :edge2.size(3)]
+        edge4 = edge4 + self.fc_edge4_m(x4)[..., :edge2.size(2), :edge2.size(3)]
         edge5 = self.fc_edge5(x5)[..., :edge2.size(2), :edge2.size(3)]
         edge_up = self.fc_edge6(torch.cat([edge1, edge2, edge3, edge4, edge5], dim=1))
         edge_out = edge_up
