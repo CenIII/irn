@@ -379,7 +379,7 @@ class MessagePassingCol():
 			cols = cols.view(bs, self.filter_size, self.filter_size, npixels[0], npixels[1]) #[1, 7, 7, 86, 125]
 			# 2. for i in range(span), fill gaussian
 			tmp_arr = cols.data.new(bs,8,npixels[0], npixels[1]).fill_(0)
-			tmp_arr = tmp_arr + cols[:,self.span,self.span][:,None]
+			# tmp_arr = tmp_arr + cols[:,self.span,self.span][:,None]
 			for i in range(1,span+1):
 				# extract ith circle [1,i*8,86,125] from cols
 				ii, jj = self._get_circle_inds(span,i)

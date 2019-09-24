@@ -58,7 +58,7 @@ def _work(process_id, model, dataset, args, quick=False):
 			rw_pred = keys[rw_pred]
 			imageio.imsave(os.path.join(args.sem_seg_out_dir, img_name + '.png'), rw_pred.astype(np.uint8))
 			imageio.imsave(os.path.join(args.sem_seg_out_dir, img_name + '_light.png'), (rw_pred*15).astype(np.uint8))
-			# imageio.imsave(os.path.join(args.sem_seg_out_dir, img_name + '_clsbd.png'), (255*clsbd[0,0].cpu().numpy()).astype(np.uint8))
+			imageio.imsave(os.path.join(args.sem_seg_out_dir, img_name + '_clsbd.png'), (255*clsbd[0,0].cpu().numpy()).astype(np.uint8))
 			
 			# if process_id == n_gpus - 1 and iter % (len(databin) // 20) == 0:
 			# 	print("%d " % ((5*iter+1)//(len(databin) // 20)), end='')
@@ -67,7 +67,7 @@ def _work(process_id, model, dataset, args, quick=False):
 def run(args):
 	# model = getattr(importlib.import_module(args.irn_network), 'EdgeDisplacement')()
 	model = getattr(importlib.import_module(args.irn_network), 'EdgeDisplacement')(infer_conf)
-	model = torchutils.reload_model(model, './exp/original_cam/sess/res50_irn_clsbd.pth')
+	model = torchutils.reload_model(model, './exp/original_cam/sess/res50_irn_clsbd_6336.pth')
 
 	# model.load_state_dict(torch.load(args.irn_weights_name), strict=False)
 	model.eval()

@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from net import resnet50
 from net.modules import ClsbdCRF
+import cv2
+import numpy as np
 
 # Default config as proposed by Philipp Kraehenbuehl and Vladlen Koltun,
 default_conf = {
@@ -210,10 +212,71 @@ class Net(nn.Module):
         self.backbone.eval()
 
 
+class Sobel:
+    def __init__(self):
+
+        self.a = torch.Tensor( [[1, 0, -1],
+                                [2, 0, -2],
+                                [1, 0, -1]]).view((1,1,3,3)).cuda()
+
+        self.b = torch.Tensor( [[1, 2, 1],
+                                [0, 0, 0],
+                                [-1, -2, -1]]).view((1,1,3,3)).cuda()
+        
+    def filt(self,x):
+        G_x = F.conv2d(x, self.a, padding=1)
+        G_y = F.conv2d(x, self.b, padding=1)
+        G = torch.sqrt(torch.pow(G_x,2)+ torch.pow(G_y,2))
+        G = G / G.max() * 255
+        theta = torch.atan2(G_y, G_x)
+        return (G, theta)
+    
+    def nms(self, img, D):
+        img = img.squeeze()
+        M, N = img.shape[-2:]
+        Z = torch.zeros((M,N)).cuda()
+        angle = D * 180. / np.pi
+        angle[angle < 0] += 180
+        angle = angle.squeeze()
+        
+        for i in range(1,M-1):
+            for j in range(1,N-1):
+                q = 255
+                r = 255
+                
+                #angle 0
+                if (0 <= angle[i,j] < 22.5) or (157.5 <= angle[i,j] <= 180):
+                    q = img[i, j+1]
+                    r = img[i, j-1]
+                #angle 45
+                elif (22.5 <= angle[i,j] < 67.5):
+                    q = img[i+1, j-1]
+                    r = img[i-1, j+1]
+                #angle 90
+                elif (67.5 <= angle[i,j] < 112.5):
+                    q = img[i+1, j]
+                    r = img[i-1, j]
+                #angle 135
+                elif (112.5 <= angle[i,j] < 157.5):
+                    q = img[i-1, j-1]
+                    r = img[i+1, j+1]
+
+                if (img[i,j] >= q) and (img[i,j] >= r):
+                    Z[i,j] = img[i,j]
+                else:
+                    Z[i,j] = img[i,j]/2.
+        return Z
+
+    def thin_edge(self,x):
+        G, D = self.filt(x)
+        x_thin = self.nms(x, D)
+        return x_thin
+        
 class EdgeDisplacement(Net):
 
     def __init__(self, crf_conf):
         super(EdgeDisplacement, self).__init__(crf_conf)
+        self.sobel = Sobel()
 
     def forward(self, x, unary, label, out_settings=None):
         def flip_add(inp,keepdim=True):
@@ -232,6 +295,8 @@ class EdgeDisplacement(Net):
         clsbd2 = torch.sigmoid(flip_add(clsbd2)/2)
 
         clsbd = (clsbd+clsbd2)/2
+        clsbd = self.sobel.thin_edge(clsbd)[None,None,:,:]
+        import pdb;pdb.set_trace()
         pred = self.convcrf(unary, clsbd, label, num_iter=30)
         return pred, clsbd
 
