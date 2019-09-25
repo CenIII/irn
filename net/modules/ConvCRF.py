@@ -678,8 +678,18 @@ class ConvCRF(nn.Module):
 				# prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * (self.pos_weight*pos_message/pos_norm + self.neg_weight*neg_message/neg_norm)
 				# prediction = (prediction*pl_pred.squeeze())#.view(N,-1).sum(dim=1)
 				return pos_message*pl_pred.squeeze(), neg_message*pl_pred.squeeze(), pos_fg_sum, pos_bg_sum, neg_sum
-			prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * (self.pos_weight*pos_message + self.neg_weight*neg_message)
+			
+			pairwise = (self.pos_weight*pos_message + self.neg_weight*neg_message)
+			prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * pairwise
 			prediction = F.softmax(prediction, dim=1)
+
+			# modulate prediction
+			top2 = torch.topk(pairwise,k=2,dim=1,largest=True)
+			top2_diff = top2.values[:,0:1] - top2.values[:,1:2]
+			p_mod = pairwise.data.new(pairwise.shape).fill_(0.)
+			p_mod = torch.scatter(p_mod,dim=1,index=top2.indices[:,0:1],src=top2_diff)
+			p_mod = p_mod / torch.clamp(p_mod.max(dim=1)[0],1.)[:,None]
+			prediction = prediction * p_mod
 			# if not i == num_iter - 1 or self.final_softmax:
 			#     if self.conf['softmax']:
 			# prediction = prediction*pl_pred#F.softmax(prediction*pl_pred, dim=1)
