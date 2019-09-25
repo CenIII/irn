@@ -48,7 +48,7 @@ infer_conf = {
     'weight': 'vector',
     "unary_weight": 1.,
     "weight_init": 0.1,
-    "pos_weight":20.,
+    "pos_weight":15,
     "neg_weight":1.,
 
     'trainable': False,
@@ -58,7 +58,7 @@ infer_conf = {
     'final_softmax': False,
 
     'pos_feats': {
-        'sdims': 100,
+        'sdims': 50,
         'compat': 0.8,
     },
     'col_feats': {
@@ -295,7 +295,7 @@ class Sobel:
 
         m1 = mask.data.new(mask.shape).fill_(0)
         m1[mask>=1.] = 1. # at least 1 dir
-        # m1[m1==0.] = 0.
+        m1[m1==0.] = 0.3
         x_thin1 = x * m1
 
         m2 = mask.data.new(mask.shape).fill_(0)
@@ -336,8 +336,8 @@ class Sobel:
         # x_thin = self.nms(x, D)
         # 1. unfold
         # import pdb;pdb.set_trace()
-        x_nms = self.nms(x)
-        x_thin = self.denoise(x_nms)
+        x_thin = self.nms(x)
+        # x_thin = self.denoise(x_nms)
         # x_thin = self.directed_nms(x_thin)
         return x_thin
         
@@ -360,12 +360,12 @@ class EdgeDisplacement(Net):
 
         x2 = x[1].squeeze()
         clsbd2 = self.infer_clsbd(x2)
-        clsbd2 = F.interpolate(clsbd2,scale_factor=1/1.48,mode='bilinear',align_corners=True)[...,:unary.shape[-2],:unary.shape[-1]]
+        clsbd2 = F.interpolate(clsbd2,scale_factor=2.,mode='bilinear',align_corners=True)[...,:unary.shape[-2],:unary.shape[-1]]
         clsbd2 = torch.sigmoid(flip_add(clsbd2)/2)
 
         clsbd = (clsbd+clsbd2)/2
-        clsbd = self.sobel.thin_edge(clsbd)
-        pred = self.convcrf(unary, clsbd, label, num_iter=70)
+        # clsbd = self.sobel.thin_edge(clsbd)
+        pred = self.convcrf(unary, clsbd, label, num_iter=100)
         return pred, clsbd
 
 

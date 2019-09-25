@@ -637,18 +637,20 @@ class ConvCRF(nn.Module):
 		# 	divs = torch.clamp(unary.view(21,-1).max(dim=1)[0],1.)[None,:,None,None]
 		# 	prediction = unary/divs
 		prediction = F.softmax(unary, dim=1)
-		pairwise = psi_unary
+		potential = - psi_unary
 		norm = False
 		for i in range(num_iter):
 			# modulate prediction
-			top2 = torch.topk(pairwise,k=2,dim=1,largest=True)
+			# import pdb;pdb.set_trace()
+			top2 = torch.topk(potential,k=2,dim=1,largest=True)
 			top2_diff = top2.values[:,0:1] - top2.values[:,1:2]
-			p_mod = pairwise.data.new(pairwise.shape).fill_(0.)
+			p_mod = potential.data.new(potential.shape).fill_(0.)
 			p_mod = torch.scatter(p_mod,dim=1,index=top2.indices[:,0:1],src=top2_diff)  # 1,21,94,125
 			p_mod = p_mod / torch.clamp(p_mod.view(N,21,-1).max(dim=2)[0],1.)[:,:,None,None]
-			prediction = prediction * p_mod
+			if i%20==0:
+				prediction = prediction * p_mod
 
-			prediction[:,0] *= 0.9
+			# prediction[:,0] *= 0.95
 			# △ 1 Message passing
 			# import pdb;pdb.set_trace()
 			messages, input_col, pl = self.kernel.compute(prediction, label)
@@ -689,8 +691,8 @@ class ConvCRF(nn.Module):
 				return pos_message*pl_pred.squeeze(), neg_message*pl_pred.squeeze(), pos_fg_sum, pos_bg_sum, neg_sum
 			
 			pairwise = (self.pos_weight*pos_message + self.neg_weight*neg_message)
-			prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * pairwise
-			prediction = F.softmax(prediction, dim=1)
+			potential = - (self.unary_weight - self.weight) * psi_unary - self.weight * pairwise
+			prediction = F.softmax(potential, dim=1)
 
 			# if not i == num_iter - 1 or self.final_softmax:
 			#     if self.conf['softmax']:
