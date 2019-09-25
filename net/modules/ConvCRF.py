@@ -629,16 +629,25 @@ class ConvCRF(nn.Module):
 		# import pdb;pdb.set_trace()
 		psi_unary = - F.log_softmax(unary, dim=1, _stacklevel=5) #- unary
 		# import pdb;pdb.set_trace()
-		if self.training:
-			prediction = F.softmax(unary, dim=1)
-			prediction[prediction>0.5] = 1.
-			prediction[prediction<=0.5] = 0.
-		else:
-			divs = torch.clamp(unary.view(21,-1).max(dim=1)[0],1.)[None,:,None,None]
-			prediction = unary/divs
-
+		# if self.training:
+		# 	prediction = F.softmax(unary, dim=1)
+		# 	prediction[prediction>0.5] = 1.
+		# 	prediction[prediction<=0.5] = 0.
+		# else:
+		# 	divs = torch.clamp(unary.view(21,-1).max(dim=1)[0],1.)[None,:,None,None]
+		# 	prediction = unary/divs
+		prediction = F.softmax(unary, dim=1)
+		pairwise = psi_unary
 		norm = False
 		for i in range(num_iter):
+			# modulate prediction
+			top2 = torch.topk(pairwise,k=2,dim=1,largest=True)
+			top2_diff = top2.values[:,0:1] - top2.values[:,1:2]
+			p_mod = pairwise.data.new(pairwise.shape).fill_(0.)
+			p_mod = torch.scatter(p_mod,dim=1,index=top2.indices[:,0:1],src=top2_diff)  # 1,21,94,125
+			p_mod = p_mod / torch.clamp(p_mod.view(N,21,-1).max(dim=2)[0],1.)[:,:,None,None]
+			prediction = prediction * p_mod
+
 			prediction[:,0] *= 0.9
 			# △ 1 Message passing
 			# import pdb;pdb.set_trace()
@@ -683,13 +692,6 @@ class ConvCRF(nn.Module):
 			prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * pairwise
 			prediction = F.softmax(prediction, dim=1)
 
-			# modulate prediction
-			top2 = torch.topk(pairwise,k=2,dim=1,largest=True)
-			top2_diff = top2.values[:,0:1] - top2.values[:,1:2]
-			p_mod = pairwise.data.new(pairwise.shape).fill_(0.)
-			p_mod = torch.scatter(p_mod,dim=1,index=top2.indices[:,0:1],src=top2_diff)
-			p_mod = p_mod / torch.clamp(p_mod.max(dim=1)[0],1.)[:,None]
-			prediction = prediction * p_mod
 			# if not i == num_iter - 1 or self.final_softmax:
 			#     if self.conf['softmax']:
 			# prediction = prediction*pl_pred#F.softmax(prediction*pl_pred, dim=1)
