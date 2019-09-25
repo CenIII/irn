@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from net import resnet50
 from net.modules import ClsbdCRF
-import cv2
 import numpy as np
 
 # Default config as proposed by Philipp Kraehenbuehl and Vladlen Koltun,
@@ -49,7 +48,7 @@ infer_conf = {
     'weight': 'vector',
     "unary_weight": 1.,
     "weight_init": 0.1,
-    "pos_weight":15.,
+    "pos_weight":20.,
     "neg_weight":1.,
 
     'trainable': False,
@@ -59,7 +58,7 @@ infer_conf = {
     'final_softmax': False,
 
     'pos_feats': {
-        'sdims': 50,
+        'sdims': 100,
         'compat': 0.8,
     },
     'col_feats': {
@@ -222,54 +221,124 @@ class Sobel:
         self.b = torch.Tensor( [[1, 2, 1],
                                 [0, 0, 0],
                                 [-1, -2, -1]]).view((1,1,3,3)).cuda()
-        
-    def filt(self,x):
-        G_x = F.conv2d(x, self.a, padding=1)
-        G_y = F.conv2d(x, self.b, padding=1)
-        G = torch.sqrt(torch.pow(G_x,2)+ torch.pow(G_y,2))
-        G = G / G.max() * 255
-        theta = torch.atan2(G_y, G_x)
-        return (G, theta)
-    
-    def nms(self, img, D):
-        img = img.squeeze()
-        M, N = img.shape[-2:]
-        Z = torch.zeros((M,N)).cuda()
-        angle = D * 180. / np.pi
-        angle[angle < 0] += 180
-        angle = angle.squeeze()
-        
-        for i in range(1,M-1):
-            for j in range(1,N-1):
-                q = 255
-                r = 255
-                
-                #angle 0
-                if (0 <= angle[i,j] < 22.5) or (157.5 <= angle[i,j] <= 180):
-                    q = img[i, j+1]
-                    r = img[i, j-1]
-                #angle 45
-                elif (22.5 <= angle[i,j] < 67.5):
-                    q = img[i+1, j-1]
-                    r = img[i-1, j+1]
-                #angle 90
-                elif (67.5 <= angle[i,j] < 112.5):
-                    q = img[i+1, j]
-                    r = img[i-1, j]
-                #angle 135
-                elif (112.5 <= angle[i,j] < 157.5):
-                    q = img[i-1, j-1]
-                    r = img[i+1, j+1]
+        self.blob = torch.Tensor(  [[1, 1, 1],
+                                    [1, 0, 1],
+                                    [1, 1, 1]]).view((1,1,3,3)).cuda()*20
 
-                if (img[i,j] >= q) and (img[i,j] >= r):
-                    Z[i,j] = img[i,j]
-                else:
-                    Z[i,j] = img[i,j]/2.
-        return Z
+        self.dir_filt = torch.Tensor([[ [1, 0, 0],
+                                        [0, 1, 0],
+                                        [0, 0, 1]],
+                                        [[0, 1, 0],
+                                        [0, 1, 0],
+                                        [0, 1, 0]],
+                                        [[0, 0, 1],
+                                        [0, 1, 0],
+                                        [1, 0, 0]],
+                                        [[0, 0, 0],
+                                        [1, 1, 1],
+                                        [0, 0, 0]]]).view((4,1,3,3)).cuda()
+    # def filt(self,x):
+    #     G_x = F.conv2d(x, self.a, padding=1)
+    #     G_y = F.conv2d(x, self.b, padding=1)
+    #     G = torch.sqrt(torch.pow(G_x,2)+ torch.pow(G_y,2))
+    #     G = G / G.max() * 255
+    #     theta = torch.atan2(G_y, G_x)
+    #     return (G, theta)
+    
+    # def nms(self, img, D):
+    #     img = img.squeeze()
+    #     M, N = img.shape[-2:]
+    #     Z = torch.zeros((M,N)).cuda()
+    #     angle = D * 180. / np.pi
+    #     angle[angle < 0] += 180
+    #     angle = angle.squeeze()
+        
+    #     import pdb;pdb.set_trace()
+
+    #     for i in range(1,M-1):
+    #         for j in range(1,N-1):
+    #             q = 255
+    #             r = 255
+                
+    #             #angle 0
+    #             if (0 <= angle[i,j] < 22.5) or (157.5 <= angle[i,j] <= 180):
+    #                 q = img[i, j+1]
+    #                 r = img[i, j-1]
+    #             #angle 45
+    #             elif (22.5 <= angle[i,j] < 67.5):
+    #                 q = img[i+1, j-1]
+    #                 r = img[i-1, j+1]
+    #             #angle 90
+    #             elif (67.5 <= angle[i,j] < 112.5):
+    #                 q = img[i+1, j]
+    #                 r = img[i-1, j]
+    #             #angle 135
+    #             elif (112.5 <= angle[i,j] < 157.5):
+    #                 q = img[i-1, j-1]
+    #                 r = img[i+1, j+1]
+
+    #             if (img[i,j] >= q) and (img[i,j] >= r):
+    #                 Z[i,j] = img[i,j]
+    #             else:
+    #                 Z[i,j] = img[i,j]/2.
+    #     return Z
+    def nms(self, x):
+        N,C,W,H = x.shape
+        x_unfold = F.unfold(x, 3, 1, 1).view(N,C,3,3,W,H)
+        # 2. check every point whether it's a peak on any direction? gen a mask, 1 if satisfy.
+        x_diff = x_unfold - x[:,:,None,None]
+        mask1 = x_diff.data.new(x_diff.shape).fill_(0)
+        mask1[x_diff<0.] = 1.
+        mask2 = torch.flip(mask1,[2,3])
+        mask = mask1 * mask2
+        mask = mask.view(N,C,-1,W,H).sum(dim=2)
+
+        m1 = mask.data.new(mask.shape).fill_(0)
+        m1[mask>=1.] = 1. # at least 1 dir
+        # m1[m1==0.] = 0.
+        x_thin1 = x * m1
+
+        m2 = mask.data.new(mask.shape).fill_(0)
+        m2[mask>=3.] = 1. # at least 2 dirs
+        m2[m2==0.] = 0.5
+        x_thin2 = x_thin1 * m2
+        
+        return x_thin2
+    
+    def denoise(self,x):
+        # N,C,W,H = x.shape
+        # x_unfold = F.unfold(x, 3, 1, 1).view(N,C,3,3,W,H)
+        tmp = F.conv2d(x, self.blob, padding=1)
+        mask = tmp.data.new(tmp.shape).fill_(0)
+        mask[tmp>1.] = 1.
+        return x * mask
+    def directed_nms(self,x):
+        tmp = F.conv2d(x, self.dir_filt, padding=1)
+
+        N,C,W,H = x.shape
+        x_unfold = F.unfold(x, 3, 1, 1).view(N,C,3,3,W,H)
+        # 2. check every point whether it's a peak on any direction? gen a mask, 1 if satisfy.
+        x_diff = x_unfold - x[:,:,None,None]
+        mask1 = x_diff.data.new(x_diff.shape).fill_(0)
+        mask1[x_diff<0.] = 1.
+        mask2 = torch.flip(mask1,[2,3])
+        mask = mask1 * mask2
+
+        # import pdb;pdb.set_trace()
+        mask = mask.view(9,W,H)
+        inds = tmp.max(dim=1)[1]
+        mask = torch.gather(mask,dim=0,index=inds).unsqueeze(0)
+
+        return x * mask
 
     def thin_edge(self,x):
-        G, D = self.filt(x)
-        x_thin = self.nms(x, D)
+        # G, D = self.filt(x)
+        # x_thin = self.nms(x, D)
+        # 1. unfold
+        # import pdb;pdb.set_trace()
+        x_nms = self.nms(x)
+        x_thin = self.denoise(x_nms)
+        # x_thin = self.directed_nms(x_thin)
         return x_thin
         
 class EdgeDisplacement(Net):
@@ -295,9 +364,8 @@ class EdgeDisplacement(Net):
         clsbd2 = torch.sigmoid(flip_add(clsbd2)/2)
 
         clsbd = (clsbd+clsbd2)/2
-        clsbd = self.sobel.thin_edge(clsbd)[None,None,:,:]
-        import pdb;pdb.set_trace()
-        pred = self.convcrf(unary, clsbd, label, num_iter=30)
+        clsbd = self.sobel.thin_edge(clsbd)
+        pred = self.convcrf(unary, clsbd, label, num_iter=70)
         return pred, clsbd
 
 

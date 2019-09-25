@@ -639,6 +639,7 @@ class ConvCRF(nn.Module):
 
 		norm = False
 		for i in range(num_iter):
+			prediction[:,0] *= 0.9
 			# △ 1 Message passing
 			# import pdb;pdb.set_trace()
 			messages, input_col, pl = self.kernel.compute(prediction, label)
