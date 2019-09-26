@@ -48,7 +48,7 @@ infer_conf = {
     'weight': 'vector',
     "unary_weight": 1.,
     "weight_init": 0.1,
-    "pos_weight":15,
+    "pos_weight":30,
     "neg_weight":1.,
 
     'trainable': False,
@@ -59,7 +59,7 @@ infer_conf = {
 
     'pos_feats': {
         'sdims': 50,
-        'compat': 0.8,
+        'compat': 1.,
     },
     'col_feats': {
         # 'sdims': 80,
@@ -295,20 +295,20 @@ class Sobel:
 
         m1 = mask.data.new(mask.shape).fill_(0)
         m1[mask>=1.] = 1. # at least 1 dir
-        m1[m1==0.] = 0.3
+        m1[m1==0.] = 0.
         x_thin1 = x * m1
 
-        m2 = mask.data.new(mask.shape).fill_(0)
-        m2[mask>=3.] = 1. # at least 2 dirs
-        m2[m2==0.] = 0.5
-        x_thin2 = x_thin1 * m2
+        # m2 = mask.data.new(mask.shape).fill_(0)
+        # m2[mask>=3.] = 1. # at least 2 dirs
+        # m2[m2==0.] = 0.
+        # x_thin2 = x_thin1 * m2
         
-        return x_thin2
+        return x_thin1
     
     def denoise(self,x):
         # N,C,W,H = x.shape
         # x_unfold = F.unfold(x, 3, 1, 1).view(N,C,3,3,W,H)
-        tmp = F.conv2d(x, self.blob, padding=1)
+        tmp = F.conv2d(x, self.blob.cuda(), padding=1)
         mask = tmp.data.new(tmp.shape).fill_(0)
         mask[tmp>1.] = 1.
         return x * mask
@@ -336,8 +336,8 @@ class Sobel:
         # x_thin = self.nms(x, D)
         # 1. unfold
         # import pdb;pdb.set_trace()
-        x_thin = self.nms(x)
-        # x_thin = self.denoise(x_nms)
+        x_nms = self.nms(x)
+        x_thin = self.denoise(x_nms)
         # x_thin = self.directed_nms(x_thin)
         return x_thin
         
@@ -364,7 +364,7 @@ class EdgeDisplacement(Net):
         clsbd2 = torch.sigmoid(flip_add(clsbd2)/2)
 
         clsbd = (clsbd+clsbd2)/2
-        # clsbd = self.sobel.thin_edge(clsbd)
+        clsbd = self.sobel.thin_edge(clsbd)
         pred = self.convcrf(unary, clsbd, label, num_iter=100)
         return pred, clsbd
 
