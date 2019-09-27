@@ -41,14 +41,14 @@ default_conf = {
 }
 
 infer_conf = {
-    'filter_size': 9,
+    'filter_size': 11,
     'blur': 2,
     'merge': False,
     'norm': 'none',
     'weight': 'vector',
     "unary_weight": 1.,
-    "weight_init": 0.1,
-    "pos_weight":30,
+    "weight_init": 0.8,
+    "pos_weight":16.,
     "neg_weight":1.,
 
     'trainable': False,
@@ -58,7 +58,7 @@ infer_conf = {
     'final_softmax': False,
 
     'pos_feats': {
-        'sdims': 50,
+        'sdims': 100,
         'compat': 1.,
     },
     'col_feats': {
@@ -147,14 +147,32 @@ class Net(nn.Module):
         # unary_raw = F.interpolate(unary_raw, label.shape[-2:], mode='bilinear', align_corners=False)#[0] #torch.unsqueeze(unary_raw, 0)
         # 2. add background
         # unary_raw /= 5.
-        unary_raw = F.pad(unary_raw, (0, 0, 0, 0, 1, 1, 0, 0), mode='constant',value=1.)
         
-        # 3. create and apply mask
-        label[label==255.] = 21
-        label = label.unsqueeze(1)
+        
+        keys = torch.unique(label)[1:-1]
         mask = torch.zeros_like(unary_raw).cuda()
-        mask = mask.scatter_(1,label.type(torch.cuda.LongTensor),1.)
-        unary = (unary_raw * mask)[:,:-1]
+        
+        for k in keys:
+            mask[:,int(k-1)] = 1.
+        unary = (unary_raw * mask)
+        unary_norm = unary / torch.clamp(F.adaptive_max_pool2d(unary, (1, 1)),1)
+        unary = F.pad(unary, (0, 0, 0, 0, 1, 0, 0, 0), mode='constant',value=1.)
+        unary_norm = F.pad(unary_norm, (0, 0, 0, 0, 1, 0, 0, 0), mode='constant',value=0.15)
+        pred = torch.argmax(unary_norm, dim=1)
+        pred = pred.unsqueeze(1)
+        mask = torch.zeros_like(unary_norm).cuda()
+        mask = mask.scatter_(1,pred.type(torch.cuda.LongTensor),1.)
+        unary = (unary * mask)
+        unary = unary / torch.clamp(F.adaptive_max_pool2d(unary, (1, 1)),1)
+        # unary[:,1:] = unary[:,1:]*2.
+        # unary[:,0] = unary[:,0]*1
+
+        # 3. create and apply mask
+        # label[label==255.] = 21
+        # label = label.unsqueeze(1)
+        # mask = torch.zeros_like(unary_raw).cuda()
+        # mask = mask.scatter_(1,label.type(torch.cuda.LongTensor),1.)
+        # unary = (unary_raw * mask)[:,:-1]
         # unary[unary>0.] = 150.
         # tmp = mask[:,:-1].sum(dim=2,keepdim=True).sum(dim=3,keepdim=True) # [N,21,1,1]
         # tmp[tmp>0.] = 1.
@@ -365,7 +383,7 @@ class EdgeDisplacement(Net):
 
         clsbd = (clsbd+clsbd2)/2
         clsbd = self.sobel.thin_edge(clsbd)
-        pred = self.convcrf(unary, clsbd, label, num_iter=100)
+        pred = self.convcrf(unary, clsbd, label, num_iter=200)
         return pred, clsbd
 
 

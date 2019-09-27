@@ -647,10 +647,10 @@ class ConvCRF(nn.Module):
 			p_mod = potential.data.new(potential.shape).fill_(0.)
 			p_mod = torch.scatter(p_mod,dim=1,index=top2.indices[:,0:1],src=top2_diff)  # 1,21,94,125
 			p_mod = p_mod / torch.clamp(p_mod.view(N,21,-1).max(dim=2)[0],1.)[:,:,None,None]
-			if i%20==0:
+			if i<2:
 				prediction = prediction * p_mod
 
-			prediction[:,0] *= 0.8
+			prediction[:,0] *= 0.7
 			# △ 1 Message passing
 			# import pdb;pdb.set_trace()
 			messages, input_col, pl = self.kernel.compute(prediction, label)
