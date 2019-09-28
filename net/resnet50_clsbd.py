@@ -47,8 +47,8 @@ infer_conf = {
     'norm': 'none',
     'weight': 'vector',
     "unary_weight": 1.,
-    "weight_init": 0.8,
-    "pos_weight":16.,
+    "weight_init": 0.9,
+    "pos_weight":18.,
     "neg_weight":1.,
 
     'trainable': False,
@@ -157,7 +157,7 @@ class Net(nn.Module):
         unary = (unary_raw * mask)
         unary_norm = unary / torch.clamp(F.adaptive_max_pool2d(unary, (1, 1)),1)
         unary = F.pad(unary, (0, 0, 0, 0, 1, 0, 0, 0), mode='constant',value=1.)
-        unary_norm = F.pad(unary_norm, (0, 0, 0, 0, 1, 0, 0, 0), mode='constant',value=0.15)
+        unary_norm = F.pad(unary_norm, (0, 0, 0, 0, 1, 0, 0, 0), mode='constant',value=0.08)
         pred = torch.argmax(unary_norm, dim=1)
         pred = pred.unsqueeze(1)
         mask = torch.zeros_like(unary_norm).cuda()

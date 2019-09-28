@@ -650,7 +650,7 @@ class ConvCRF(nn.Module):
 			if i<2:
 				prediction = prediction * p_mod
 
-			prediction[:,0] *= 0.7
+			prediction[:,0] *= 0.73
 			# △ 1 Message passing
 			# import pdb;pdb.set_trace()
 			messages, input_col, pl = self.kernel.compute(prediction, label)
