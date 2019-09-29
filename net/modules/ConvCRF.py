@@ -639,6 +639,7 @@ class ConvCRF(nn.Module):
 		prediction = F.softmax(unary, dim=1)
 		potential = - psi_unary
 		norm = False
+		prev_pred = prediction.clone()
 		for i in range(num_iter):
 			# modulate prediction
 			# import pdb;pdb.set_trace()
@@ -693,7 +694,10 @@ class ConvCRF(nn.Module):
 			pairwise = (self.pos_weight*pos_message + self.neg_weight*neg_message)
 			potential = - (self.unary_weight - self.weight) * psi_unary - self.weight * pairwise
 			prediction = F.softmax(potential, dim=1)
-
+			# if ((prev_pred-prediction)**2).sum()<1e-3:
+			# 	break
+			prev_pred = prediction.clone()
+			
 			# if not i == num_iter - 1 or self.final_softmax:
 			#     if self.conf['softmax']:
 			# prediction = prediction*pl_pred#F.softmax(prediction*pl_pred, dim=1)

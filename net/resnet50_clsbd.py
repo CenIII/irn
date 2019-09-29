@@ -148,12 +148,12 @@ class Net(nn.Module):
         # 2. add background
         # unary_raw /= 5.
         
-        
-        keys = torch.unique(label)[1:-1]
+        # import pdb;pdb.set_trace()
+        keys = label.squeeze().nonzero()[:,0] #torch.unique(label)[1:-1]
         mask = torch.zeros_like(unary_raw).cuda()
         
         for k in keys:
-            mask[:,int(k-1)] = 1.
+            mask[:,int(k)] = 1.
         unary = (unary_raw * mask)
         unary_norm = unary / torch.clamp(F.adaptive_max_pool2d(unary, (1, 1)),1)
         unary = F.pad(unary, (0, 0, 0, 0, 1, 0, 0, 0), mode='constant',value=1.)

@@ -38,7 +38,7 @@ def _work(process_id, model, dataset, args, quick=False):
 			# import pdb;pdb.set_trace()
 			for k in range(len(pack['img'])):
 				pack['img'][k] = pack['img'][k].cuda(non_blocking=True)
-			rw, clsbd = model(pack['img'], pack['unary'].cuda(non_blocking=True), pack['seg_label'].cuda(non_blocking=True))
+			rw, clsbd = model(pack['img'], pack['unary'].cuda(non_blocking=True), pack['label'].cuda(non_blocking=True))
 
 			cam_dict = np.load(args.cam_out_dir + '/' + img_name + '.npy', allow_pickle=True).item()
 
@@ -52,7 +52,7 @@ def _work(process_id, model, dataset, args, quick=False):
 			rw_up = F.interpolate(rw, scale_factor=4, mode='bilinear', align_corners=False)[0, :, :orig_img_size[0], :orig_img_size[1]]
 			rw_up = rw_up / torch.max(rw_up)
 
-			rw_up_bg = F.pad(rw_up[1:], (0, 0, 0, 0, 1, 0), value=0.3)#args.sem_seg_bg_thres
+			rw_up_bg = F.pad(rw_up[1:], (0, 0, 0, 0, 1, 0), value=0.5)#args.sem_seg_bg_thres
 			rw_pred = torch.argmax(rw_up_bg, dim=0).cpu().numpy()
 
 			rw_pred = keys[rw_pred]
