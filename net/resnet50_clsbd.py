@@ -141,21 +141,27 @@ class Net(nn.Module):
         edge_out = edge_up
         return edge_out
 
+    def increase_contrast(self,unary_norm,factor=2.):
+        return torch.clamp(factor*(unary_norm-0.5)+0.5,0.,1.)
+
     def make_unary_for_infer(self, unary_raw, label):
         # unary_raw [N, 21, W, H]
         # 1. rescale
         # unary_raw = F.interpolate(unary_raw, label.shape[-2:], mode='bilinear', align_corners=False)#[0] #torch.unsqueeze(unary_raw, 0)
         # 2. add background
         # unary_raw /= 5.
-        
+        W, H = unary_raw.shape[-2:]
         # import pdb;pdb.set_trace()
         keys = label.squeeze().nonzero()[:,0] #torch.unique(label)[1:-1]
         mask = torch.zeros_like(unary_raw).cuda()
-        
         for k in keys:
             mask[:,int(k)] = 1.
         unary = (unary_raw * mask)
         unary_norm = unary / torch.clamp(F.adaptive_max_pool2d(unary, (1, 1)),1)
+        # unary_norm = self.increase_contrast(unary_norm,factor=1.5)
+        # unary_norm[:,0] = self.increase_contrast(unary_norm[:,0],factor=1.5)
+        # unary_norm[:,3] = self.increase_contrast(unary_norm[:,3],factor=1.5)
+        # unary_norm[:,18] = self.increase_contrast(unary_norm[:,18],factor=1.5)
         unary = F.pad(unary, (0, 0, 0, 0, 1, 0, 0, 0), mode='constant',value=1.)
         unary_norm = F.pad(unary_norm, (0, 0, 0, 0, 1, 0, 0, 0), mode='constant',value=0.08)
         pred = torch.argmax(unary_norm, dim=1)
@@ -388,7 +394,9 @@ class EdgeDisplacement(Net):
 
         clsbd = (clsbd+clsbd2+clsbd3)/3
         clsbd = self.sobel.thin_edge(clsbd)
+        unary_ret = unary.clone()
+        # clsbd.fill_(0.)
         pred = self.convcrf(unary, clsbd, label, num_iter=100)
-        return pred, clsbd
+        return pred, clsbd, unary_ret
 
 

@@ -43,6 +43,8 @@ import torch.nn.functional as F
 
 import gc
 
+import matplotlib.pyplot as plt
+
 
 # Default config as proposed by Philipp Kraehenbuehl and Vladlen Koltun,
 default_conf = {
@@ -240,9 +242,10 @@ def polarness(x, label): #[1, 21, 42, 63]
 	# import pdb;pdb.set_trace()
 	# keys = np.unique(label.cpu())[:-1].astype(np.int32)
 	D = x.shape[1] #len(keys) #
-	x_t = x#[:,keys]
-	# x_t /= x_t.sum(dim=1,keepdim=True)
-	entropy = (- x_t * torch.log(x_t+1e-5)).sum(dim=1,keepdim=True)
+	
+	x_t = x+1e-5#[:,keys]
+	x_t /= x_t.sum(dim=1,keepdim=True)
+	entropy = (- x_t * torch.log(x_t)).sum(dim=1,keepdim=True)
 	if D > 1:
 		pl = 1. - entropy / np.log(D)
 	else: 
@@ -444,24 +447,31 @@ class MessagePassingCol():
 		# if key == 'pos':
 		# # polarization as 1. 
 		pl = polarness(input, label)  #[1, 1, 42, 63]
-		input = input * pl
-		if self.pyinn:
-			input_col = P.im2col(input, self.filter_size, 1, self.span)
-		else:
-			# An alternative implementation of num2col.
-			#
-			# This has implementation uses the torch 0.4 im2col operation.
-			# This implementation was not avaible when we did the experiments
-			# published in our paper. So less "testing" has been done.
-			#
-			# It is around ~20% slower then the pyinn implementation but
-			# easier to use as it removes a dependency.
-			input_unfold = F.unfold(input, self.filter_size, 1, self.span)
-			input_unfold = input_unfold.view(
-				bs, num_channels, self.filter_size, self.filter_size,
-				npixels[0], npixels[1])
-			input_col = input_unfold
-		return input_col, pl
+		input_pl = input * pl
+
+		def make_col(input):
+			if self.pyinn:
+				input_col = P.im2col(input, self.filter_size, 1, self.span)
+			else:
+				# An alternative implementation of num2col.
+				#
+				# This has implementation uses the torch 0.4 im2col operation.
+				# This implementation was not avaible when we did the experiments
+				# published in our paper. So less "testing" has been done.
+				#
+				# It is around ~20% slower then the pyinn implementation but
+				# easier to use as it removes a dependency.
+				input_unfold = F.unfold(input, self.filter_size, 1, self.span)
+				input_unfold = input_unfold.view(
+					bs, num_channels, self.filter_size, self.filter_size,
+					npixels[0], npixels[1])
+				input_col = input_unfold
+			return input_col
+		
+		input_col = make_col(input)
+		input_pl_col = make_col(input_pl)
+
+		return input_col, input_pl_col, pl
 
 	def _compute_gaussian(self, input_col, gaussian, norm=None):
 		shape = self.shape #input_col.shape
@@ -525,11 +535,12 @@ class MessagePassingCol():
 		#     pred = 0
 		#     for gaus, norm in zip(self._gaus_list, self._norm_list):
 		#         pred += self._compute_gaussian(input, gaus, norm)
-		input_col, pl = self._make_input_col(input, label)
+		input_col, input_pl_col, pl = self._make_input_col(input, label)
 		preds = {}
 		for k,v in self._gaus_list.items():
-			preds[k] = self._compute_gaussian(input_col, v)
-		return preds, input_col, pl
+			inp = input_pl_col# if k=='pos' else input_col
+			preds[k] = self._compute_gaussian(inp, v)
+		return preds, input_pl_col, pl
 
 class ConvCRF(nn.Module):
 	"""
@@ -640,6 +651,7 @@ class ConvCRF(nn.Module):
 		potential = - psi_unary
 		norm = False
 		prev_pred = prediction.clone()
+		# import pdb;pdb.set_trace()
 		for i in range(num_iter):
 			# modulate prediction
 			# import pdb;pdb.set_trace()
@@ -647,14 +659,27 @@ class ConvCRF(nn.Module):
 			top2_diff = top2.values[:,0:1] - top2.values[:,1:2]
 			p_mod = potential.data.new(potential.shape).fill_(0.)
 			p_mod = torch.scatter(p_mod,dim=1,index=top2.indices[:,0:1],src=top2_diff)  # 1,21,94,125
-			p_mod = p_mod / torch.clamp(p_mod.view(N,21,-1).max(dim=2)[0],1.)[:,:,None,None]
-			if i<2:
+			p_mod = p_mod / torch.clamp(p_mod.view(N,self.nclasses,-1).max(dim=2)[0],1.)[:,:,None,None]
+			if i==0:
 				prediction = prediction * p_mod
+			
+			# if i%10==0 or i<6:
+			# 	plt.imshow(prediction[0,0].cpu().numpy())
+			# 	plt.savefig('iter'+str(i)+'_'+str(0)+'.png')
+			# 	keys = label.squeeze().nonzero()[:,0] #torch.unique(label)[1:-1]
+				
+			# 	for k in keys:
+			# 		plt.imshow(prediction[0,int(k+1)].cpu().numpy())
+			# 		plt.savefig('iter'+str(i)+'_'+str(1+int(k.cpu().numpy()))+'.png')
 
 			prediction[:,0] *= 0.7
 			# △ 1 Message passing
 			# import pdb;pdb.set_trace()
 			messages, input_col, pl = self.kernel.compute(prediction, label)
+			# if i%10==0 or i<6:
+			# 	plt.imshow(pl[0,0].cpu().numpy())
+			# 	plt.savefig('iter'+str(i)+'_pl'+'.png')
+			# 	print(pl.min())
 			_,C,K,_,W,H = input_col.shape
 			# △ 2 Compatibility transform
 			# mle setting

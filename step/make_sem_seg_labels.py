@@ -32,13 +32,14 @@ def _work(process_id, model, dataset, args, quick=False):
 		qdar = tqdm.tqdm(enumerate(data_loader),total=len(data_loader),ascii=True,position=process_id)
 		for iter, pack in qdar:
 			img_name = voc12.dataloader.decode_int_filename(pack['name'][0])
+			# print(img_name)
 			orig_img_size = np.asarray(pack['size'])
 
 			# edge, dp = model(pack['img'][0].cuda(non_blocking=True))
 			# import pdb;pdb.set_trace()
 			for k in range(len(pack['img'])):
 				pack['img'][k] = pack['img'][k].cuda(non_blocking=True)
-			rw, clsbd = model(pack['img'], pack['unary'].cuda(non_blocking=True), pack['label'].cuda(non_blocking=True))
+			rw, clsbd, unary = model(pack['img'], pack['unary'].cuda(non_blocking=True), pack['label'].cuda(non_blocking=True))
 
 			cam_dict = np.load(args.cam_out_dir + '/' + img_name + '.npy', allow_pickle=True).item()
 
@@ -48,6 +49,7 @@ def _work(process_id, model, dataset, args, quick=False):
 			# cam_downsized_values = cams.cuda()
 
 			# rw = indexing.propagate_to_edge(cam_downsized_values, edge, beta=args.beta, exp_times=args.exp_times, radius=5)
+
 			rw = rw[:,keys]
 			rw_up = F.interpolate(rw, scale_factor=4, mode='bilinear', align_corners=False)[0, :, :orig_img_size[0], :orig_img_size[1]]
 			rw_up = rw_up / torch.max(rw_up)
@@ -58,8 +60,9 @@ def _work(process_id, model, dataset, args, quick=False):
 			rw_pred = keys[rw_pred]
 			imageio.imsave(os.path.join(args.sem_seg_out_dir, img_name + '.png'), rw_pred.astype(np.uint8))
 			imageio.imsave(os.path.join(args.sem_seg_out_dir, img_name + '_light.png'), (rw_pred*15).astype(np.uint8))
-			# imageio.imsave(os.path.join(args.sem_seg_out_dir, img_name + '_clsbd.png'), (255*clsbd[0,0].cpu().numpy()).astype(np.uint8))
-			
+			imageio.imsave(os.path.join(args.sem_seg_out_dir, img_name + '_clsbd.png'), (255*clsbd[0,0].cpu().numpy()).astype(np.uint8))
+			# for k in keys:
+			# 	imageio.imsave(os.path.join(args.sem_seg_out_dir, img_name + '_'+str(k)+'.png'), (255*unary[0,k].cpu().numpy()).astype(np.uint8))
 			# if process_id == n_gpus - 1 and iter % (len(databin) // 20) == 0:
 			# 	print("%d " % ((5*iter+1)//(len(databin) // 20)), end='')
 
