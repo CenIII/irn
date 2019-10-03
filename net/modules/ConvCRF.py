@@ -660,7 +660,7 @@ class ConvCRF(nn.Module):
 			p_mod = potential.data.new(potential.shape).fill_(0.)
 			p_mod = torch.scatter(p_mod,dim=1,index=top2.indices[:,0:1],src=top2_diff)  # 1,21,94,125
 			p_mod = p_mod / torch.clamp(p_mod.view(N,self.nclasses,-1).max(dim=2)[0],1.)[:,:,None,None]
-			if i==0:
+			if i<2:
 				prediction = prediction * p_mod
 			
 			# if i%10==0 or i<6:
@@ -672,7 +672,7 @@ class ConvCRF(nn.Module):
 			# 		plt.imshow(prediction[0,int(k+1)].cpu().numpy())
 			# 		plt.savefig('iter'+str(i)+'_'+str(1+int(k.cpu().numpy()))+'.png')
 
-			prediction[:,0] *= 0.7
+			prediction[:,0] *= 0.64
 			# △ 1 Message passing
 			# import pdb;pdb.set_trace()
 			messages, input_col, pl = self.kernel.compute(prediction, label)
