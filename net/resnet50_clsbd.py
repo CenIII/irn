@@ -48,7 +48,7 @@ infer_conf = {
     'weight': 'vector',
     "unary_weight": 1.,
     "weight_init": 0.9,
-    "pos_weight":20.,
+    "pos_weight":1.,
     "neg_weight":1.,
 
     'trainable': False,
@@ -59,7 +59,7 @@ infer_conf = {
 
     'pos_feats': {
         'sdims': 100,
-        'compat': 1.,
+        'compat': 0.,
     },
     'col_feats': {
         # 'sdims': 80,
@@ -157,13 +157,24 @@ class Net(nn.Module):
         unary = (unary_raw * mask)
         unary_norm = unary / torch.clamp(F.adaptive_max_pool2d(unary, (1, 1)),1)
         unary = F.pad(unary, (0, 0, 0, 0, 1, 0, 0, 0), mode='constant',value=1.)
-        unary_norm = F.pad(unary_norm, (0, 0, 0, 0, 1, 0, 0, 0), mode='constant',value=0.08)
-        pred = torch.argmax(unary_norm, dim=1)
-        pred = pred.unsqueeze(1)
-        mask = torch.zeros_like(unary_norm).cuda()
-        mask = mask.scatter_(1,pred.type(torch.cuda.LongTensor),1.)
+
+        unary_norm1 = F.pad(unary_norm, (0, 0, 0, 0, 1, 0, 0, 0), mode='constant',value=0.08)
+        pred1 = torch.argmax(unary_norm1, dim=1)
+        pred1 = pred1.unsqueeze(1)
+        mask1 = torch.zeros_like(unary_norm1).cuda()
+        mask1 = mask1.scatter_(1,pred1.type(torch.cuda.LongTensor),1.)
+
+        unary_norm2 = F.pad(unary_norm, (0, 0, 0, 0, 1, 0, 0, 0), mode='constant',value=0.04)
+        pred2 = torch.argmax(unary_norm2, dim=1)
+        pred2 = pred2.unsqueeze(1)
+        mask2 = torch.zeros_like(unary_norm2).cuda()
+        mask2 = mask2.scatter_(1,pred2.type(torch.cuda.LongTensor),1.)
+
+        mask = torch.cat((mask2[:,0:1], mask1[:,1:]),dim=1)
         unary = (unary * mask)
         unary = unary / torch.clamp(F.adaptive_max_pool2d(unary, (1, 1)),1)
+
+
         # unary[:,1:] = unary[:,1:]*2.
         # unary[:,0] = unary[:,0]*1
 
