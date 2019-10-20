@@ -11,6 +11,7 @@ import voc12.dataloader
 from misc import pyutils, torchutils
 
 from torch import autograd
+from torch.nn.utils import clip_grad_norm_
 
 def validate(model, data_loader):
     print('validating ... ', flush=True, end='')
@@ -83,6 +84,7 @@ def run(args):
             with autograd.detect_anomaly():
                 optimizer.zero_grad()
                 loss.backward()
+                clip_grad_norm_(model.parameters(),1.)
                 optimizer.step()
 
             if (optimizer.global_step-1)%100 == 0:
@@ -97,6 +99,7 @@ def run(args):
         else:
             validate(model, val_data_loader)
             timer.reset_stage()
-
+        
+        torch.save(model.module.state_dict(), args.cam_weights_name + '.pth')
     torch.save(model.module.state_dict(), args.cam_weights_name + '.pth')
     torch.cuda.empty_cache()

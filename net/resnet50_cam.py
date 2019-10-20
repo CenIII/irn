@@ -51,7 +51,6 @@ class Net(nn.Module):
         x = self.stage3(x)
         x = self.stage4(x)  # N, 2048, 32, 32
         
-
         x = torchutils.gap2d(x, keepdims=True) # N, 2048, 1, 1
         x = self.classifier(x) # N, 20, 32, 32
         
