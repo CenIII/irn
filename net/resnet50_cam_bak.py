@@ -4,26 +4,6 @@ import torch.nn.functional as F
 from misc import torchutils
 from net import resnet50
 
-class _ASPP(nn.Module):
-    """
-    Atrous spatial pyramid pooling (ASPP)
-    """
-
-    def __init__(self, in_ch, out_ch, rates):
-        super(_ASPP, self).__init__()
-        for i, rate in enumerate(rates):
-            self.add_module(
-                "c{}".format(i),
-                nn.Conv2d(in_ch, out_ch, 3, 1, padding=rate, dilation=rate, bias=True),
-            )
-
-        for m in self.children():
-            nn.init.normal_(m.weight, mean=0, std=0.01)
-            nn.init.constant_(m.bias, 0)
-
-    def forward(self, x):
-        return sum([stage(x) for stage in self.children()])
-
 
 class Net(nn.Module):
 
@@ -38,7 +18,7 @@ class Net(nn.Module):
         self.stage3 = nn.Sequential(self.resnet50.layer3)
         self.stage4 = nn.Sequential(self.resnet50.layer4)
 
-        self.classifier = _ASPP(2048, 21, [6, 12, 18, 24]) #nn.Conv2d(2048, 20, 1, bias=False)
+        self.classifier = nn.Conv2d(2048, 20, 1, bias=False)
 
         self.backbone = nn.ModuleList([self.stage1, self.stage2, self.stage3, self.stage4])
         self.newly_added = nn.ModuleList([self.classifier])
