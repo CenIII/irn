@@ -78,7 +78,10 @@ def run(args):
             label = pack['label'].cuda(non_blocking=True)
 
             x = model(img)
-            loss = F.multilabel_soft_margin_loss(x, label)
+            loss = F.multilabel_soft_margin_loss(x, label, weight=torch.tensor([1,1,1,1,1,
+                                                                                1,1,1,1,1,
+                                                                                1,1,1,1,1,
+                                                                                1,1,1,1,1,1./20.]).type(torch.FloatTensor).cuda())
 
             avg_meter.add({'loss1': loss.item()})
             with autograd.detect_anomaly():

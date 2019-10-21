@@ -14,8 +14,14 @@ def run(args):
         cams = cam_dict['high_res']
         cams = np.pad(cams, ((1, 0), (0, 0), (0, 0)), mode='constant', constant_values=args.cam_eval_thres)
         keys = np.pad(cam_dict['keys'] + 1, (1, 0), mode='constant')
+        # import pdb;pdb.set_trace()
         cls_labels = np.argmax(cams, axis=0)
-        cls_labels = keys[cls_labels]
+        
+        # cls_labels = keys[cls_labels]
+        cls_labels[cls_labels==21] = 0
+        for i in range(21):
+            if i not in keys:
+                cls_labels[cls_labels==i] = 0
         preds.append(cls_labels.copy())
 
     confusion = calc_semantic_segmentation_confusion(preds, labels)

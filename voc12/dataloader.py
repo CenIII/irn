@@ -165,11 +165,13 @@ class VOC12ClassificationDataset(VOC12ImageDataset):
                  resize_long, rescale, img_normal, hor_flip,
                  crop_size, crop_method)
         self.label_list = load_image_label_list_from_npy(self.img_name_list)
+        bg_labels = np.ones((self.label_list.shape[0],1)).astype(np.float)
+        self.label_list = np.concatenate((self.label_list,bg_labels), axis=1).astype(np.float)
 
     def __getitem__(self, idx):
         out = super().__getitem__(idx)
 
-        out['label'] = torch.from_numpy(self.label_list[idx])
+        out['label'] = torch.from_numpy(self.label_list[idx]).type(torch.FloatTensor)
 
         return out
 
@@ -196,8 +198,8 @@ class VOC12ClassificationDatasetMSF(VOC12ClassificationDataset):
             s_img = self.img_normal(s_img)
             s_img = imutils.HWC_to_CHW(s_img)
             ms_img_list.append(np.stack([s_img, np.flip(s_img, -1)], axis=0))
-        if len(self.scales) == 1:
-            ms_img_list = ms_img_list[0]
+        # if len(self.scales) == 1:
+        #     ms_img_list = ms_img_list[0]
 
         out = {"name": name_str, "img": ms_img_list, "size": (img.shape[0], img.shape[1]),
                "label": torch.from_numpy(self.label_list[idx])}

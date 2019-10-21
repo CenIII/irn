@@ -45,11 +45,11 @@ def _work(process_id, model, dataset, args):
 
             valid_cat = torch.nonzero(label)[:, 0]
 
-            strided_cam = strided_cam[valid_cat]
-            strided_cam /= F.adaptive_max_pool2d(strided_cam, (1, 1)) + 1e-5
+            # strided_cam = strided_cam[valid_cat]
+            # strided_cam /= F.adaptive_max_pool2d(strided_cam, (1, 1)) + 1e-5
 
-            highres_cam = highres_cam[valid_cat]
-            highres_cam /= F.adaptive_max_pool2d(highres_cam, (1, 1)) + 1e-5
+            # highres_cam = highres_cam[valid_cat]
+            # highres_cam /= F.adaptive_max_pool2d(highres_cam, (1, 1)) + 1e-5
 
             # save cams
             np.save(os.path.join(args.cam_out_dir, img_name + '.npy'),
@@ -66,7 +66,7 @@ def run(args):
 
     n_gpus = torch.cuda.device_count()
 
-    dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.train_list,
+    dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.infer_list,
                                                              voc12_root=args.voc12_root, scales=args.cam_scales)
     dataset = torchutils.split_dataset(dataset, n_gpus)
 

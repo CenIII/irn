@@ -38,7 +38,7 @@ class Net(nn.Module):
         self.stage3 = nn.Sequential(self.resnet50.layer3)
         self.stage4 = nn.Sequential(self.resnet50.layer4)
 
-        self.classifier = _ASPP(2048, 20, [6, 12, 18, 24]) #nn.Conv2d(2048, 20, 1, bias=False)
+        self.classifier = _ASPP(2048, 21, [6, 12, 18, 24]) #nn.Conv2d(2048, 20, 1, bias=False)
 
         self.backbone = nn.ModuleList([self.stage1, self.stage2, self.stage3, self.stage4])
         self.newly_added = nn.ModuleList([self.classifier])
@@ -54,7 +54,7 @@ class Net(nn.Module):
         x = torchutils.gap2d(x, keepdims=True) # N, 2048, 1, 1
         x = self.classifier(x) # N, 20, 32, 32
         
-        x = x.view(-1, 20) # N, 20
+        x = x.view(-1, 21) # N, 20
 
         return x
 
