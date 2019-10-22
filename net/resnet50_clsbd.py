@@ -140,51 +140,58 @@ class Net(nn.Module):
         edge_out = edge_up
         return edge_out
 
-    def make_unary_for_infer(self, unary_raw, label):
-        # unary_raw [N, 21, W, H]
-        # 1. rescale
-        # unary_raw = F.interpolate(unary_raw, label.shape[-2:], mode='bilinear', align_corners=False)#[0] #torch.unsqueeze(unary_raw, 0)
-        # 2. add background
-        # unary_raw /= 5.
-        unary_raw = F.pad(unary_raw, (0, 0, 0, 0, 1, 1, 0, 0), mode='constant',value=1.)
+    # def make_unary_for_infer(self, unary_raw, label):
+    #     # TODO: unify format of unary_raw for both train and infer
+    #     # unary_raw [N, 21, W, H]
+    #     # 1. rescale
+    #     # unary_raw = F.interpolate(unary_raw, label.shape[-2:], mode='bilinear', align_corners=False)#[0] #torch.unsqueeze(unary_raw, 0)
+    #     # 2. add background
+    #     # unary_raw /= 5.
+    #     unary_raw = F.pad(unary_raw, (0, 0, 0, 0, 1, 1, 0, 0), mode='constant',value=1.)
         
-        # 3. create and apply mask
-        label[label==255.] = 21
-        label = label.unsqueeze(1)
-        mask = torch.zeros_like(unary_raw).cuda()
-        mask = mask.scatter_(1,label.type(torch.cuda.LongTensor),1.)
-        unary = (unary_raw * mask)[:,:-1]
-        # unary[unary>0.] = 150.
-        # tmp = mask[:,:-1].sum(dim=2,keepdim=True).sum(dim=3,keepdim=True) # [N,21,1,1]
-        # tmp[tmp>0.] = 1.
-        # unary += tmp
-        # unary[:,0] = 1.
-        return unary 
+    #     # 3. create and apply mask
+    #     label[label==255.] = 21
+    #     label = label.unsqueeze(1)
+    #     mask = torch.zeros_like(unary_raw).cuda()
+    #     mask = mask.scatter_(1,label.type(torch.cuda.LongTensor),1.)
+    #     unary = (unary_raw * mask)[:,:-1]
+    #     # unary[unary>0.] = 150.
+    #     # tmp = mask[:,:-1].sum(dim=2,keepdim=True).sum(dim=3,keepdim=True) # [N,21,1,1]
+    #     # tmp[tmp>0.] = 1.
+    #     # unary += tmp
+    #     # unary[:,0] = 1.
+    #     return unary 
 
-    def make_unary_for_train(self, label):
-        # unary_raw [N, 21, W, H]
-        # 1. rescale
-        # unary_raw = F.interpolate(unary_raw, label.shape[-2:], mode='bilinear', align_corners=False)#[0] #torch.unsqueeze(unary_raw, 0)
-        # # 2. add background
-        # unary_raw = F.pad(unary_raw, (0, 0, 0, 0, 1, 1, 0, 0), mode='constant',value=1.)
-        # 3. create and apply mask
-        label[label==255.] = 21
-        label = label.unsqueeze(1)
-        N,_,W,H = label.shape
-        mask = torch.zeros(N,22,W,H).cuda()
-        mask = mask.scatter_(1,label.type(torch.cuda.LongTensor),1.)
-        # unary = (unary_raw * mask)[:,:-1]
-        unary = mask[:,:-1]
-        unary[unary>0.] = 100.
-        return unary 
+    # def make_unary_for_train(self, label):
+    #     # unary_raw [N, 21, W, H]
+    #     # 1. rescale
+    #     # unary_raw = F.interpolate(unary_raw, label.shape[-2:], mode='bilinear', align_corners=False)#[0] #torch.unsqueeze(unary_raw, 0)
+    #     # # 2. add background
+    #     # unary_raw = F.pad(unary_raw, (0, 0, 0, 0, 1, 1, 0, 0), mode='constant',value=1.)
+    #     # 3. create and apply mask
+    #     label[label==255.] = 21
+    #     label = label.unsqueeze(1)
+    #     N,_,W,H = label.shape
+    #     mask = torch.zeros(N,22,W,H).cuda()
+    #     mask = mask.scatter_(1,label.type(torch.cuda.LongTensor),1.)
+    #     # unary = (unary_raw * mask)[:,:-1]
+    #     unary = mask[:,:-1]
+    #     unary[unary>0.] = 100.
+    #     return unary 
 
-    def forward(self, x, label):
+    def forward(self, img, unary):
+        # NOTE: assume unary (label) is well prepared as a tensor.
         # unary_raw = self.cam_net(x)
         # unary_raw = F.relu(unary_raw).detach()
-        unary = self.make_unary_for_train(label)
-        clsbd = self.infer_clsbd(x)[...,:unary.shape[-2],:unary.shape[-1]]
+        # if self.training:
+        #     unary = self.make_unary_for_train(label)
+        # else:
+        #     unary = self.make_unary_for_infer(label)
+        clsbd = self.infer_clsbd(img)[...,:unary.shape[-2],:unary.shape[-1]]
         clsbd = torch.sigmoid(clsbd)
-        pred = self.convcrf(unary, clsbd, label, num_iter=1)
+        import pdb;pdb.set_trace()
+        # TODO: fix crf forward. 
+        pred = self.convcrf(unary, clsbd, num_iter=1)
         hms = self.save_hm(unary,clsbd.repeat(1,21,1,1))
         return pred, hms
 

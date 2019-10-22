@@ -40,7 +40,7 @@ def random_scale(img, scale_range, order):
     if isinstance(img, tuple):
         return (pil_rescale(img[0], target_scale, order[0]), pil_rescale(img[1], target_scale, order[1]))
     else:
-        return pil_rescale(img[0], target_scale, order)
+        return pil_rescale(img, target_scale, order)
 
 def random_lr_flip(img):
 
