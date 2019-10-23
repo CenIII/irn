@@ -307,7 +307,7 @@ def clsbd_alternate_train(train_data_loader, model, clsbd, optimizer, avg_meter,
 		# import pdb;pdb.set_trace()
 		loss_pack, hms = clsbd(img, seg_label, mask=mask)
 		# TODO: visualize
-		if (optimizer.global_step-1)%2 == 0 and args.cam_visualize_train:
+		if (optimizer.global_step-1)%20 == 0 and args.cam_visualize_train:
 			visualize(img, clsbd.module, hms, label, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir_clsbd)
 			visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir_clsbd, origin=0, descr='unary')
 
@@ -320,7 +320,7 @@ def clsbd_alternate_train(train_data_loader, model, clsbd, optimizer, avg_meter,
 			# clip_grad_norm_(clsbd.parameters(),1.)
 			optimizer.step()
 
-		if (optimizer.global_step-1)%20 == 0:
+		if (optimizer.global_step-1)%50 == 0:
 			timer.update_progress(optimizer.global_step / optimizer.max_step)
 
 			print('step:%5d/%5d' % (optimizer.global_step - 1, optimizer.max_step),
@@ -340,24 +340,24 @@ def run(args):
 		model.load_state_dict(torch.load(args.cam_weights_name + '.pth'), strict=True)
 
 	clsbd = getattr(importlib.import_module(args.irn_network), 'Net')()
-	seed = 25
-	torch.manual_seed(seed)
-	torch.cuda.manual_seed(seed)
-	torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU.
-	np.random.seed(seed)  # Numpy module.
-	random.seed(seed)  # Python random module.
-	torch.manual_seed(seed)
-	torch.backends.cudnn.benchmark = False
-	torch.backends.cudnn.deterministic = True
-	def _init_fn(worker_id):
-		np.random.seed(int(seed))
+	# seed = 25
+	# torch.manual_seed(seed)
+	# torch.cuda.manual_seed(seed)
+	# torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU.
+	# np.random.seed(seed)  # Numpy module.
+	# random.seed(seed)  # Python random module.
+	# torch.manual_seed(seed)
+	# torch.backends.cudnn.benchmark = False
+	# torch.backends.cudnn.deterministic = True
+	# def _init_fn(worker_id):
+	# 	np.random.seed(int(seed))
 
 	# model train loader
-	train_dataset = voc12.dataloader.VOC12ClassificationDataset(args.train_list, voc12_root=args.voc12_root,
-																resize_long=(320, 640), hor_flip=True,
+	train_dataset = voc12.dataloader.VOC12ClassificationDataset(args.train_list, voc12_root=args.voc12_root, #resize_long=(320, 640),
+																hor_flip=True,
 																crop_size=512, crop_method="random",rescale=(0.5, 1.5))
 	train_data_loader = DataLoader(train_dataset, batch_size=args.cam_batch_size,
-								   shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=True, worker_init_fn=_init_fn)
+								   shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=True)#, worker_init_fn=_init_fn)
 	
 	max_step = (len(train_dataset) // args.cam_batch_size) #* args.cam_num_epoches
 	model_max_step = max(0, max_step * ((args.cam_num_epoches-5)//2))
