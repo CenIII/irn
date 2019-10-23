@@ -77,8 +77,31 @@ def get_random_crop_box(imgsize, cropsize):
 
     return cont_top, cont_top+ch, cont_left, cont_left+cw, img_top, img_top+ch, img_left, img_left+cw
 
-def random_crop(images, cropsize, default_values):
+# def random_crop(images, cropsize, default_values):
 
+#     if isinstance(images, np.ndarray): images = (images,)
+#     if isinstance(default_values, int): default_values = (default_values,)
+
+#     imgsize = images[0].shape[:2]
+#     box = get_random_crop_box(imgsize, cropsize)
+
+#     new_images = []
+#     for img, f in zip(images, default_values):
+
+#         if len(img.shape) == 3:
+#             cont = np.ones((cropsize, cropsize, img.shape[2]), img.dtype)*f
+#         else:
+#             cont = np.ones((cropsize, cropsize), img.dtype)*f
+#         cont[box[0]:box[1], box[2]:box[3]] = img[box[4]:box[5], box[6]:box[7]]
+#         new_images.append(cont)
+
+#     if len(new_images) == 1:
+#         new_images = new_images[0]
+
+#     return new_images
+
+def random_crop(images, cropsize, default_values):
+    
     if isinstance(images, np.ndarray): images = (images,)
     if isinstance(default_values, int): default_values = (default_values,)
 
@@ -86,19 +109,23 @@ def random_crop(images, cropsize, default_values):
     box = get_random_crop_box(imgsize, cropsize)
 
     new_images = []
+    new_masks = []
     for img, f in zip(images, default_values):
 
         if len(img.shape) == 3:
             cont = np.ones((cropsize, cropsize, img.shape[2]), img.dtype)*f
+            mask = np.zeros((cropsize, cropsize, img.shape[2]), img.dtype)
         else:
             cont = np.ones((cropsize, cropsize), img.dtype)*f
+            mask = np.zeros((cropsize, cropsize), img.dtype)
         cont[box[0]:box[1], box[2]:box[3]] = img[box[4]:box[5], box[6]:box[7]]
+        mask[box[0]:box[1], box[2]:box[3]] = 1.
         new_images.append(cont)
-
+        new_masks.append(mask)
     if len(new_images) == 1:
         new_images = new_images[0]
-
-    return new_images
+        new_masks = new_masks[0]
+    return new_images, new_masks
 
 def top_left_crop(img, cropsize, default_value):
 
@@ -160,6 +187,23 @@ def crf_inference_label(img, labels, t=10, n_labels=21, gt_prob=0.7):
     d = dcrf.DenseCRF2D(w, h, n_labels)
 
     unary = unary_from_labels(labels, n_labels, gt_prob=gt_prob, zero_unsure=False)
+
+    d.setUnaryEnergy(unary)
+    d.addPairwiseGaussian(sxy=3, compat=3)
+    d.addPairwiseBilateral(sxy=50, srgb=5, rgbim=np.ascontiguousarray(np.copy(img)), compat=10)
+
+    q = d.inference(t)
+
+    return np.argmax(np.array(q).reshape((n_labels, h, w)), axis=0)
+
+def crf_inference_unary(img, unary, t=6, n_labels=21):
+    
+    h, w = img.shape[:2]
+    import pdb;pdb.set_trace()
+
+    d = dcrf.DenseCRF2D(w, h, n_labels)
+
+    # unary = unary_from_labels(labels, n_labels, gt_prob=gt_prob, zero_unsure=False)
 
     d.setUnaryEnergy(unary)
     d.addPairwiseGaussian(sxy=3, compat=3)

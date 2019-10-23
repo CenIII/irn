@@ -76,7 +76,7 @@ infer_conf = {
 
 class Net(nn.Module):
 
-    def __init__(self, crf_conf):
+    def __init__(self):
         super(Net, self).__init__()
         # self.cam_net = cam_net
         # backbone
@@ -119,7 +119,7 @@ class Net(nn.Module):
         )
         self.fc_edge6 = nn.Conv2d(160, 1, 1, bias=True)
 
-        self.convcrf = ClsbdCRF(crf_conf, nclasses=21)
+        self.convcrf = ClsbdCRF(default_conf, nclasses=21)
 
         self.backbone = nn.ModuleList([self.stage1, self.stage2, self.stage3, self.stage4, self.stage5])
         self.edge_layers = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge3, self.fc_edge4, self.fc_edge5, self.fc_edge6])
@@ -179,7 +179,7 @@ class Net(nn.Module):
     #     unary[unary>0.] = 100.
     #     return unary 
 
-    def forward(self, img, unary):
+    def forward(self, img, unary, mask=None):
         # NOTE: assume unary (label) is well prepared as a tensor.
         # unary_raw = self.cam_net(x)
         # unary_raw = F.relu(unary_raw).detach()
@@ -189,9 +189,8 @@ class Net(nn.Module):
         #     unary = self.make_unary_for_infer(label)
         clsbd = self.infer_clsbd(img)[...,:unary.shape[-2],:unary.shape[-1]]
         clsbd = torch.sigmoid(clsbd)
-        import pdb;pdb.set_trace()
         # TODO: fix crf forward. 
-        pred = self.convcrf(unary, clsbd, num_iter=1)
+        pred = self.convcrf(unary, clsbd, num_iter=1, mask=mask)
         hms = self.save_hm(unary,clsbd.repeat(1,21,1,1))
         return pred, hms
 
@@ -215,6 +214,11 @@ class Net(nn.Module):
     def train(self, mode=True):
         super().train(mode)
         self.backbone.eval()
+        self.convcrf = ClsbdCRF(default_conf, nclasses=21).cuda()
+
+    def eval(self,mode=True):
+        super().eval(mode)
+        self.convcrf = ClsbdCRF(infer_conf, nclasses=21).cuda()
 
 
 class EdgeDisplacement(Net):

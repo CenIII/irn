@@ -153,7 +153,7 @@ class ClsbdCRF(nn.Module):
 
 		return
 
-	def forward(self, unary, clsbd, label, num_iter=5):
+	def forward(self, unary, clsbd, num_iter=5, mask=None):
 		""" Run a forward pass through ConvCRF.
 
 		Arguments:
@@ -185,7 +185,7 @@ class ClsbdCRF(nn.Module):
 		self.CRF.add_pairwise_energies(feat_list,
 									   compat_list, is_clsbd_list, conf['merge'])
 
-		prediction = self.CRF.inference(unary, label, clsbd, num_iter=num_iter)
+		prediction = self.CRF.inference(unary, clsbd, num_iter=num_iter, mask=mask)
 
 		self.CRF.clean_filters()
 		return prediction
@@ -242,8 +242,7 @@ def _negative(dz):
 	else:
 		return -dz
 
-def polarness(x, label): #[1, 21, 42, 63]
-	# import pdb;pdb.set_trace()
+def polarness(x): #[1, 21, 42, 63]
 	# keys = np.unique(label.cpu())[:-1].astype(np.int32)
 	D = x.shape[1] #len(keys) #
 	x_t = x#[:,keys]
@@ -350,13 +349,11 @@ class MessagePassingCol():
 	
 	def update_max_for_circle(self, cols, cid):  #[2, 19, 19, 128, 128]
 		# TODO: implements this.
-		# import pdb;pdb.set_trace()
 		N,K,_,W,H = cols.shape
 		# Goal: obtain max for cid's circle.
 		# 1. obtain a tensor of size [N,8*cid,2*cid,W,H]
 		# 1.1. get circle inds
 		ii,jj = self._get_circle_inds(self.span,cid)
-		# import pdb;pdb.set_trace()
 		# 1.2. get *predefined* kernel path by every circle ind
 		circ_paths = self.kernel_paths[ii,jj]  #[24, 28, 2]
 		paths_flat = circ_paths.view(-1,2)
@@ -452,7 +449,7 @@ class MessagePassingCol():
 			bs, 1, self.filter_size, self.filter_size,
 			npixels[0], npixels[1])
 
-	def _make_input_col(self,input,label):
+	def _make_input_col(self,input):
 		shape = input.shape
 		num_channels = shape[1]
 		bs = shape[0]
@@ -478,7 +475,7 @@ class MessagePassingCol():
 
 		# if key == 'pos':
 		# # polarization as 1. 
-		pl = polarness(input, label)  #[1, 1, 42, 63]
+		pl = polarness(input)  #[1, 1, 42, 63]
 		input = input * pl
 		if self.pyinn:
 			input_col = P.im2col(input, self.filter_size, 1, self.span)
@@ -514,13 +511,11 @@ class MessagePassingCol():
 		#     product = gaussian * input_col #* pl.unsqueeze(2).unsqueeze(3)
 		# else:
 		#     product = gaussian * input_col
-		# import pdb;pdb.set_trace()
 		product = gaussian * input_col
 
 		if self.verbose:
 			show_memusage(name="Product")
 
-		# import pdb;pdb.set_trace()
 		product = product*self.kp_mask
 		product = product.view([bs, num_channels,
 								k_sqr, input_col.shape[-2], input_col.shape[-1]])
@@ -554,7 +549,7 @@ class MessagePassingCol():
 
 		return message
 		
-	def compute(self, input, label):
+	def compute(self, input):
 		# if self.merge:
 		#     pred = self._compute_gaussian(input, self.gaussian)
 		# else:
@@ -562,7 +557,7 @@ class MessagePassingCol():
 		#     pred = 0
 		#     for gaus, norm in zip(self._gaus_list, self._norm_list):
 		#         pred += self._compute_gaussian(input, gaus, norm)
-		input_col, pl = self._make_input_col(input, label)
+		input_col, pl = self._make_input_col(input)
 		preds = {}
 		for k,v in self._gaus_list.items():
 			preds[k] = self._compute_gaussian(input_col, v)
@@ -665,14 +660,12 @@ class ConvCRF(nn.Module):
 			kernel_paths=self.kernel_paths_mat,
 			kp_mask=self.kp_mask)
 
-	def inference(self, unary, label, clsbd, num_iter=3):
-    	# NOTE: assume unary has already been softmax'ed. 
+	def inference(self, unary, clsbd, num_iter=3, mask=None):
+		# NOTE: assume unary has already been softmax'ed. 
 		N = unary.shape[0]
 		# unary must be logits from cam layer. psi_unary = -unary and prediction = softmax(unary)
 		# △ 0 Initialize: Q(i.e. prediction) and psi(i.e. psi_unary)
-		# import pdb;pdb.set_trace()
 		psi_unary = - F.log_softmax(unary, dim=1, _stacklevel=5) #- unary
-		# import pdb;pdb.set_trace()
 		# if self.training:
 		# 	prediction = F.softmax(unary, dim=1)
 		# 	prediction[prediction>0.5] = 1.
@@ -685,15 +678,13 @@ class ConvCRF(nn.Module):
 		norm = False
 		for i in range(num_iter):
 			# △ 1 Message passing
-			# import pdb;pdb.set_trace()
-			messages, input_col, pl = self.kernel.compute(prediction, label)
+			messages, input_col, pl = self.kernel.compute(prediction)
 			_,C,K,_,W,H = input_col.shape
 			input_col = input_col*self.kernel.kp_mask
 			# △ 2 Compatibility transform
 			# mle setting
 			# message normalize over polarized points, kernel wise.
 			if norm: 
-				# import pdb;pdb.set_trace()
 				kernel_norm = torch.clamp(input_col.sum(dim=2).sum(dim=2),1.).detach()
 				pos_message = messages['pos']/kernel_norm
 				kernel_norm_neg = torch.clamp(self.neg_comp(input_col.view(N,C,-1,1)).view(input_col.shape).sum(dim=2).sum(dim=2),1.).detach()
@@ -704,19 +695,21 @@ class ConvCRF(nn.Module):
 				neg_message = self.neg_comp(messages['neg'])
 				
 			# △ 3 Local Update (and normalize)
-			# import pdb;pdb.set_trace()
 			if self.training:
 				pl_pred = (prediction*pl)
 
 				pos_norm = pl_pred*input_col.view(N,C,-1,W,H).sum(dim=2)
-				pos_bg_sum = torch.clamp(pos_norm[:,0].sum().detach(),1.)
-				pos_fg_sum = torch.clamp(pos_norm[:,1:].sum().detach(),1.)
+				pos_fg_sum = torch.clamp(pos_norm[:,:-1].sum().detach(),1.)
+				pos_bg_sum = torch.clamp(pos_norm[:,-1:].sum().detach(),1.)
 				neg_input_col = self.neg_comp(input_col.view(N,C,-1,1)).view(input_col.shape).view(N,C,-1,W,H).sum(dim=2)
 				neg_sum = torch.clamp((pl_pred*neg_input_col).sum().detach(),1.)
 
 				return pos_message*pl_pred, neg_message*pl_pred, pos_fg_sum, pos_bg_sum, neg_sum
 			prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * (self.pos_weight*pos_message + self.neg_weight*neg_message)
 			prediction = F.softmax(prediction, dim=1)
+			if mask is not None:
+				prediction = prediction * mask
+
 			# if not i == num_iter - 1 or self.final_softmax:
 			#     if self.conf['softmax']:
 			# prediction = prediction*pl_pred#F.softmax(prediction*pl_pred, dim=1)
