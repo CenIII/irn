@@ -189,8 +189,9 @@ def crf_inference_label(img, labels, t=10, n_labels=21, gt_prob=0.7):
     unary = unary_from_labels(labels, n_labels, gt_prob=gt_prob, zero_unsure=False)
 
     d.setUnaryEnergy(unary)
-    d.addPairwiseGaussian(sxy=3, compat=3)
-    d.addPairwiseBilateral(sxy=50, srgb=5, rgbim=np.ascontiguousarray(np.copy(img)), compat=10)
+    # NOTE: update sxy / 4 due to 512->128
+    d.addPairwiseGaussian(sxy=0.75, compat=3)
+    d.addPairwiseBilateral(sxy=12.5, srgb=5, rgbim=np.ascontiguousarray(np.copy(img)), compat=10)
 
     q = d.inference(t)
 
@@ -206,8 +207,9 @@ def crf_inference_unary(img, unary, t=6, n_labels=21):
     # unary = unary_from_labels(labels, n_labels, gt_prob=gt_prob, zero_unsure=False)
 
     d.setUnaryEnergy(unary)
-    d.addPairwiseGaussian(sxy=3, compat=3)
-    d.addPairwiseBilateral(sxy=50, srgb=5, rgbim=np.ascontiguousarray(np.copy(img)), compat=10)
+    
+    d.addPairwiseGaussian(sxy=0.75, compat=3)
+    d.addPairwiseBilateral(sxy=12.5, srgb=5, rgbim=np.ascontiguousarray(np.copy(img)), compat=10)
 
     q = d.inference(t)
 

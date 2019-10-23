@@ -19,6 +19,7 @@ import os
 
 from torch import autograd
 from torch.nn.utils import clip_grad_norm_
+import random 
 
 def visualize(x, net, hms, label, cb, iterno, img_denorm, savepath):
 			# plt.figure(1)
@@ -217,7 +218,7 @@ def make_seg2clsbd_label_bak(seg_output,label,mask,args):
 	clsbd_label = clsbd_label * mask
 	return clsbd_label, mask
 
-def make_seg2clsbd_label(seg_output,label,mask,args):
+def make_seg2clsbd_label_norm(seg_output,label,mask,args):
 	'''
 	Given seg_output of shape ([16, 21, 32, 32]), we make label for clsbd network. 
 	return: clsbd_label
@@ -243,25 +244,45 @@ def make_seg2clsbd_label(seg_output,label,mask,args):
 	bg = 1 - bg
 	clsbd_label = torch.cat((fg,bg),dim=1)
 
-	# # 2. softmax 
-	# probs = F.softmax(seg_output,dim=1)
-	# # 3. obtain & apply argmax mask
-	# preds = torch.argmax(probs,dim=1).unsqueeze(1)
-	# max_mask = probs.data.new(probs.shape).fill_(0.)
-	# max_mask = torch.scatter(max_mask,dim=1,index=preds,value=1.)
-	# probs_m = probs * max_mask
-	# # 4. select target classes
-	# probs_mtc = probs_m * label[:,:,None,None]
-	# # 5. thresholding fg, bg
-	# fg = probs_mtc[:,:-1]
-	# bg = probs_mtc[:,-1:]
-	# fg[fg<args.conf_fg_thres] = 0.
-	# bg[bg<args.conf_bg_thres] = 0.
-	# clsbd_label = torch.cat((fg,bg),dim=1)
-	# # 6. binarize 
-	# clsbd_label[clsbd_label>0] = 1.
-	# # 7. apply mask
-	# clsbd_label = clsbd_label * mask
+	return clsbd_label, mask
+
+def make_seg2clsbd_label(img,seg_output,label,mask,args,img_denorm):
+	'''
+	CRF version
+	Given seg_output of shape ([16, 21, 32, 32]), we make label for clsbd network. 
+	return: clsbd_label
+	'''
+	# 0. detach off
+	seg_output = seg_output.detach()
+	mask = mask.detach()
+	# 1. upsample
+	w,h = seg_output.shape[-2:]
+	seg_output = F.interpolate(seg_output, (w*4,h*4), mode='bilinear', align_corners=False) #[16, 21, 128, 128]
+	mask = F.interpolate(mask, (w*4,h*4), mode='bilinear', align_corners=False) #[16, 21, 128, 128]
+	
+	norm_seg = seg_output / F.adaptive_max_pool2d(seg_output, (1, 1)) + 1e-5
+	norm_seg = norm_seg * label[:,:,None,None]
+	fg = norm_seg[:,:-1]
+	img_down = F.interpolate(img, (w*4,h*4), mode='bilinear', align_corners=False)
+	N = img_down.shape[0]
+	# crf fg_conf
+	# crf bg_conf
+	fg_conf = F.pad(fg, (0, 0, 0, 0, 0, 1, 0, 0), mode='constant',value=args.conf_fg_thres)
+	bg_conf = F.pad(fg, (0, 0, 0, 0, 0, 1, 0, 0), mode='constant',value=args.conf_bg_thres)
+	for i in range(N):
+		img_dn = img_denorm(img_down[i].permute(1,2,0).data.cpu().numpy()).astype(np.ubyte)
+		keys = label[i].nonzero()[:,0].cpu().numpy()
+		fg_conf_pane = torch.argmax(fg_conf[i][keys], dim=0).cpu().numpy()
+		pred = torch.from_numpy(keys[imutils.crf_inference_label(img_dn, fg_conf_pane, n_labels=keys.shape[0])]).cuda().unsqueeze(0)
+		fg_conf[i] = 0.
+		fg_conf[i] = torch.scatter(fg_conf[i],dim=0,index=pred,value=1.)
+
+		bg_conf_pane = torch.argmax(bg_conf[i][keys], dim=0).cpu().numpy()
+		pred = torch.from_numpy(keys[imutils.crf_inference_label(img_dn, bg_conf_pane, n_labels=keys.shape[0])]).cuda().unsqueeze(0)
+		bg_conf[i] = 0.
+		bg_conf[i] = torch.scatter(bg_conf[i],dim=0,index=pred,value=1.)
+	# combine two confs.
+	clsbd_label = torch.cat((fg_conf[:,:-1],bg_conf[:,-1:]),dim=1)
 	return clsbd_label, mask
 
 def compute_clsbd_loss(pred):
@@ -282,11 +303,11 @@ def clsbd_alternate_train(train_data_loader, model, clsbd, optimizer, avg_meter,
 		mask = pack['mask'].cuda(non_blocking=True)  # [16, 21]
 		# mask down sample 
 		seg_output = model(img) # [16, 21, 32, 32]
-		seg_label, mask = make_seg2clsbd_label(seg_output, label, mask, args) # format: one channel image, each pixel denoted by class num. 
+		seg_label, mask = make_seg2clsbd_label(img, seg_output, label, mask, args, img_denorm) # format: one channel image, each pixel denoted by class num. 
 		# import pdb;pdb.set_trace()
 		loss_pack, hms = clsbd(img, seg_label, mask=mask)
 		# TODO: visualize
-		if (optimizer.global_step-1)%10 == 0 and args.cam_visualize_train:
+		if (optimizer.global_step-1)%2 == 0 and args.cam_visualize_train:
 			visualize(img, clsbd.module, hms, label, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir_clsbd)
 			visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir_clsbd, origin=0, descr='unary')
 
@@ -296,7 +317,7 @@ def clsbd_alternate_train(train_data_loader, model, clsbd, optimizer, avg_meter,
 		with autograd.detect_anomaly():
 			optimizer.zero_grad()
 			loss.backward()
-			clip_grad_norm_(model.parameters(),1.)
+			# clip_grad_norm_(clsbd.parameters(),1.)
 			optimizer.step()
 
 		if (optimizer.global_step-1)%20 == 0:
@@ -310,7 +331,7 @@ def clsbd_alternate_train(train_data_loader, model, clsbd, optimizer, avg_meter,
 	else:
 		# TODO: validation. 
 		timer.reset_stage()
-		torch.save(model.module.state_dict(), args.irn_weights_name + '.pth')
+		torch.save(clsbd.module.state_dict(), args.irn_weights_name + '.pth')
 
 def run(args):
 
@@ -319,13 +340,24 @@ def run(args):
 		model.load_state_dict(torch.load(args.cam_weights_name + '.pth'), strict=True)
 
 	clsbd = getattr(importlib.import_module(args.irn_network), 'Net')()
+	seed = 25
+	torch.manual_seed(seed)
+	torch.cuda.manual_seed(seed)
+	torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU.
+	np.random.seed(seed)  # Numpy module.
+	random.seed(seed)  # Python random module.
+	torch.manual_seed(seed)
+	torch.backends.cudnn.benchmark = False
+	torch.backends.cudnn.deterministic = True
+	def _init_fn(worker_id):
+		np.random.seed(int(seed))
 
 	# model train loader
 	train_dataset = voc12.dataloader.VOC12ClassificationDataset(args.train_list, voc12_root=args.voc12_root,
 																resize_long=(320, 640), hor_flip=True,
 																crop_size=512, crop_method="random",rescale=(0.5, 1.5))
 	train_data_loader = DataLoader(train_dataset, batch_size=args.cam_batch_size,
-								   shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=True)
+								   shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=True, worker_init_fn=_init_fn)
 	
 	max_step = (len(train_dataset) // args.cam_batch_size) #* args.cam_num_epoches
 	model_max_step = max(0, max_step * ((args.cam_num_epoches-5)//2))

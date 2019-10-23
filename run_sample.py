@@ -60,7 +60,7 @@ if __name__ == '__main__':
     parser.add_argument("--cam_visualize_train", default=False)
     parser.add_argument("--cam_preload", default=False)
     # Mining Inter-pixel Relations
-    parser.add_argument("--conf_fg_thres", default=0.50, type=float)
+    parser.add_argument("--conf_fg_thres", default=0.3, type=float)
     parser.add_argument("--conf_bg_thres", default=0.05, type=float)
 
     # Inter-pixel Relation Network (IRNet)
