@@ -13,10 +13,14 @@ def join_path(args):
     args.vis_out_dir_init = os.path.join(args.exp_root, args.vis_out_dir_init)
     args.vis_out_dir_model = os.path.join(args.exp_root, args.vis_out_dir_model)
     args.vis_out_dir_clsbd = os.path.join(args.exp_root, args.vis_out_dir_clsbd)
-    args.ir_label_out_dir = os.path.join(args.exp_root, args.ir_label_out_dir)
-    args.unary_out_dir = os.path.join(args.exp_root, args.unary_out_dir)
-    args.sem_seg_out_dir = os.path.join(args.exp_root, args.sem_seg_out_dir)
-    args.ins_seg_out_dir = os.path.join(args.exp_root, args.ins_seg_out_dir)
+    args.valid_out_dir = os.path.join(args.exp_root, args.valid_out_dir)
+    args.valid_clsbd_out_dir = os.path.join(args.exp_root, args.valid_clsbd_out_dir)
+    args.valid_model_out_dir = os.path.join(args.exp_root, args.valid_model_out_dir)
+
+    # args.ir_label_out_dir = os.path.join(args.exp_root, args.ir_label_out_dir)
+    # args.unary_out_dir = os.path.join(args.exp_root, args.unary_out_dir)
+    # args.sem_seg_out_dir = os.path.join(args.exp_root, args.sem_seg_out_dir)
+    # args.ins_seg_out_dir = os.path.join(args.exp_root, args.ins_seg_out_dir)
 
     os.makedirs('./exp', exist_ok=True)
     os.makedirs(args.exp_root, exist_ok=True)
@@ -27,10 +31,13 @@ def join_path(args):
     os.makedirs(args.vis_out_dir_init, exist_ok=True)
     os.makedirs(args.vis_out_dir_model, exist_ok=True)
     os.makedirs(args.vis_out_dir_clsbd, exist_ok=True)
-    os.makedirs(args.ir_label_out_dir, exist_ok=True)
-    os.makedirs(args.unary_out_dir, exist_ok=True)
-    os.makedirs(args.sem_seg_out_dir, exist_ok=True)
-    os.makedirs(args.ins_seg_out_dir, exist_ok=True)
+    os.makedirs(args.valid_out_dir, exist_ok=True)
+    os.makedirs(args.valid_clsbd_out_dir, exist_ok=True)
+    os.makedirs(args.valid_model_out_dir, exist_ok=True)
+    # os.makedirs(args.ir_label_out_dir, exist_ok=True)
+    # os.makedirs(args.unary_out_dir, exist_ok=True)
+    # os.makedirs(args.sem_seg_out_dir, exist_ok=True)
+    # os.makedirs(args.ins_seg_out_dir, exist_ok=True)
     return args
 
 if __name__ == '__main__':
@@ -52,13 +59,15 @@ if __name__ == '__main__':
     parser.add_argument("--cam_network", default="net.resnet50_cam", type=str)
     parser.add_argument("--cam_crop_size", default=512, type=int)
     parser.add_argument("--cam_batch_size", required=True, type=int)
-    parser.add_argument("--cam_num_epoches", default=6, type=int)
+    parser.add_argument("--cam_num_epoches", default=11, type=int)
+    parser.add_argument("--cam_start_epoch", default=5, type=int)
     parser.add_argument("--cam_learning_rate", required=True, type=float)
     parser.add_argument("--cam_weight_decay", default=1e-4, type=float)
     parser.add_argument("--cam_eval_thres", default=0.15, type=float)
-    parser.add_argument("--cam_scales", default=(1.0,))# 0.5, 1.5, 2.0))
+    parser.add_argument("--cam_scales", default=(1.0,0.5))# 0.5, 1.5, 2.0)) # NOTE: 1.0 must be the first as network will take 1st as standard img size.
     parser.add_argument("--cam_visualize_train", default=False)
     parser.add_argument("--cam_preload", default=False)
+    parser.add_argument("--clsbd_preload", default=False)
     # Mining Inter-pixel Relations
     parser.add_argument("--conf_fg_thres", default=0.3, type=float)
     parser.add_argument("--conf_bg_thres", default=0.05, type=float)
@@ -88,10 +97,16 @@ if __name__ == '__main__':
     parser.add_argument("--vis_out_dir_init", default="result/vis/init", type=str)
     parser.add_argument("--vis_out_dir_model", default="result/vis/model", type=str)
     parser.add_argument("--vis_out_dir_clsbd", default="result/vis/clsbd", type=str)
+    parser.add_argument("--valid_out_dir", default="result/validate", type=str)
+    parser.add_argument("--valid_clsbd_out_dir", default="result/validate/clsbd", type=str)
+    parser.add_argument("--valid_model_out_dir", default="result/validate/model", type=str)
+    
+
     parser.add_argument("--unary_out_dir", default="result/unary", type=str)
     parser.add_argument("--ir_label_out_dir", default="result/ir_label20", type=str)
     parser.add_argument("--sem_seg_out_dir", default="result/sem_seg_clsbd", type=str)
     parser.add_argument("--ins_seg_out_dir", default="result/ins_seg", type=str)
+
 
     # Step
     parser.add_argument("--train_cam_pass", default=True)

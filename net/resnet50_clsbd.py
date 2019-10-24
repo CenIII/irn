@@ -46,8 +46,8 @@ infer_conf = {
     'norm': 'none',
     'weight': 'vector',
     "unary_weight": 1.,
-    "weight_init": 0.1,
-    "pos_weight":15.,
+    "weight_init": 0.9,
+    "pos_weight":1.,
     "neg_weight":1.,
 
     'trainable': False,
@@ -58,7 +58,7 @@ infer_conf = {
 
     'pos_feats': {
         'sdims': 50,
-        'compat': 0.8,
+        'compat': 0.,
     },
     'col_feats': {
         # 'sdims': 80,
@@ -179,7 +179,7 @@ class Net(nn.Module):
     #     unary[unary>0.] = 100.
     #     return unary 
 
-    def forward(self, img, unary, mask=None):
+    def forward(self, img, unary, num_iter=1, mask=None):
         # NOTE: assume unary (label) is well prepared as a tensor.
         # unary_raw = self.cam_net(x)
         # unary_raw = F.relu(unary_raw).detach()
@@ -189,9 +189,31 @@ class Net(nn.Module):
         #     unary = self.make_unary_for_infer(label)
         clsbd = self.infer_clsbd(img)[...,:unary.shape[-2],:unary.shape[-1]]
         clsbd = torch.sigmoid(clsbd)
-        # TODO: fix crf forward. 
-        pred = self.convcrf(unary, clsbd, num_iter=1, mask=mask)
+        pred = self.convcrf(unary, clsbd, num_iter=num_iter, mask=mask)
         hms = self.save_hm(unary,clsbd.repeat(1,21,1,1))
+        return pred, hms
+
+    def infer_crf(self,clsbd, unary, num_iter=1, mask=None):
+        clsbd = torch.sigmoid(clsbd)[...,:unary.shape[-2],:unary.shape[-1]]
+        pred = self.convcrf(unary, clsbd, num_iter=num_iter, mask=mask)
+        hms = self.save_hm(unary,clsbd.repeat(1,21,1,1))
+        return pred, hms
+
+    def forwardMSF(self,img_pack, unary, mask=None):
+        def flip_add(inp):
+            return (inp[:,0]+inp[:,1].flip(-1))/2
+        def fiveD_forward(inp):
+            N = inp.shape[0]
+            out = self.infer_clsbd(inp.view(N*2,*(inp.shape[2:])))
+            out = out.view(N,2,*(out.shape[1:]))
+            return out
+        num_scales = len(img_pack)
+        clsbd_list = [flip_add(fiveD_forward(img)) for img in img_pack]
+        std_size = clsbd_list[0].shape[-2:]
+        clsbd = torch.mean(torch.stack(
+            [F.interpolate(o, std_size, mode='bilinear', align_corners=False) for o
+                in clsbd_list]), 0)
+        pred, hms = self.infer_crf(clsbd, unary, num_iter=50, mask=mask)
         return pred, hms
 
     def getHeatmaps(self, hms, classid):
@@ -215,11 +237,12 @@ class Net(nn.Module):
         super().train(mode)
         self.backbone.eval()
         self.convcrf = ClsbdCRF(default_conf, nclasses=21).cuda()
+        self.convcrf.train()
 
     def eval(self,mode=True):
-        super().eval(mode)
+        super().eval()
         self.convcrf = ClsbdCRF(infer_conf, nclasses=21).cuda()
-
+        self.convcrf.eval()
 
 class EdgeDisplacement(Net):
 

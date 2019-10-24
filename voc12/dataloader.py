@@ -176,6 +176,62 @@ class VOC12ClassificationDataset(VOC12ImageDataset):
 
         return out
 
+class VOC12ClassificationDatasetMSF_Train(VOC12ImageDataset):
+
+    def __init__(self, img_name_list_path, voc12_root,
+                 resize_long=None, rescale=None, img_normal=TorchvisionNormalize(), hor_flip=False,
+                 crop_size=None, crop_method=None, scales=(1.0,)):
+        super().__init__(img_name_list_path, voc12_root,
+                 resize_long, rescale, img_normal, hor_flip,
+                 crop_size, crop_method)
+        self.label_list = load_image_label_list_from_npy(self.img_name_list)
+        bg_labels = np.ones((self.label_list.shape[0],1)).astype(np.float)
+        self.label_list = np.concatenate((self.label_list,bg_labels), axis=1).astype(np.float)
+        self.scales = scales
+
+    def __getitem__(self, idx):
+        name = self.img_name_list[idx]
+        name_str = decode_int_filename(name)
+
+        img = np.asarray(imageio.imread(get_img_path(name_str, self.voc12_root)))
+
+        if self.resize_long:
+            img = imutils.random_resize_long(img, self.resize_long[0], self.resize_long[1])
+
+        if self.rescale:
+            img = imutils.random_scale(img, scale_range=self.rescale, order=3)
+
+        if self.hor_flip:
+            img = imutils.random_lr_flip(img)
+
+        if self.crop_size:
+            if self.crop_method == "random":
+                img, mask = imutils.random_crop(img, self.crop_size, 0)
+            else:
+                img, mask = imutils.top_left_crop(img, self.crop_size, 0)
+
+        ms_img_list = []
+        for s in self.scales:
+            if s == 1:
+                s_img = img
+            else:
+                s_img = imutils.pil_rescale(img, s, order=3)
+            s_img = self.img_normal(s_img)
+            s_img = imutils.HWC_to_CHW(s_img)
+            ms_img_list.append(np.stack([s_img, np.flip(s_img, -1)], axis=0))
+
+        if self.img_normal:
+            img = self.img_normal(img)
+
+        if self.to_torch:
+            img = imutils.HWC_to_CHW(img)
+            mask = imutils.HWC_to_CHW(mask)
+        mask = torch.from_numpy(mask[0:1].astype(np.float)).type(torch.FloatTensor)
+
+        label = torch.from_numpy(self.label_list[idx]).type(torch.FloatTensor)
+
+        return {'name': name, 'img': img, 'mask': mask, 'label': label, 'msf_img': ms_img_list}
+
 class VOC12ClassificationDatasetMSF(VOC12ClassificationDataset):
 
     def __init__(self, img_name_list_path, voc12_root,
@@ -194,6 +250,7 @@ class VOC12ClassificationDatasetMSF(VOC12ClassificationDataset):
         for s in self.scales:
             if s == 1:
                 s_img = img
+                orig_img = img
             else:
                 s_img = imutils.pil_rescale(img, s, order=3)
             s_img = self.img_normal(s_img)
@@ -201,9 +258,11 @@ class VOC12ClassificationDatasetMSF(VOC12ClassificationDataset):
             ms_img_list.append(np.stack([s_img, np.flip(s_img, -1)], axis=0))
         # if len(self.scales) == 1:
         #     ms_img_list = ms_img_list[0]
+        
+        orig_img = imutils.HWC_to_CHW(self.img_normal(orig_img))
 
-        out = {"name": name_str, "img": ms_img_list, "size": (img.shape[0], img.shape[1]),
-               "label": torch.from_numpy(self.label_list[idx])}
+        out = {"name": name_str, "img": ms_img_list, "orig_img":orig_img, "size": (img.shape[0], img.shape[1]),
+               "label": torch.from_numpy(self.label_list[idx]).type(torch.FloatTensor)}
         return out
 
 class VOC12ClassificationDatasetMSF_Clsbd(VOC12ClassificationDataset):

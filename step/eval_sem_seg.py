@@ -21,26 +21,11 @@ def run(args):
     print(args.sem_seg_out_dir)
     preds = []
     qdar = tqdm.tqdm(dataset.ids,total=len(dataset.ids),ascii=True)
-    # cls_stats = np.zeros(21)
-    # id_list = load_img_name_list('voc12/boat.txt')
-    # id_list = [decode_int_filename(id_list[i]) for i in range(len(id_list))]
-    # ind_list = []
-    # cnt = 0
     for id in qdar:
-        # if id in id_list:
-        # ind_list.append(cnt)
         cls_labels = imageio.imread(os.path.join(args.sem_seg_out_dir, id + '.png')).astype(np.uint8)
         cls_labels[cls_labels == 255] = 0
         preds.append(cls_labels.copy())
         keys = np.unique(cls_labels)
-        # for k in keys:
-        #     cls_stats[k] += 1
-            # if k==4:
-            #     print(id)
-        # cnt+=1
-    # ind_list = np.array(ind_list).astype(np.int32)
-    # import pdb;pdb.set_trace()
-    # print("class stats: "+str(cls_stats))
     confusion = calc_semantic_segmentation_confusion(preds, labels)[:21, :21] #[labels[ind] for ind in ind_list]
 
     gtj = confusion.sum(axis=1)

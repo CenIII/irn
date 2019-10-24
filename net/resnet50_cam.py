@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from misc import torchutils
+from misc import torchutils, imutils
 from net import resnet50
 
 class _ASPP(nn.Module):
@@ -43,8 +43,7 @@ class Net(nn.Module):
         self.backbone = nn.ModuleList([self.stage1, self.stage2, self.stage3, self.stage4])
         self.newly_added = nn.ModuleList([self.classifier])
 
-    def forward(self, x):
-
+    def _forward(self, x):
         x = self.stage1(x)
         x = self.stage2(x).detach()
 
@@ -57,6 +56,30 @@ class Net(nn.Module):
         # x = x.view(-1, 21) # N, 20
 
         return x
+
+    def forward(self, x, MSF=False):
+        if not MSF:
+            return self._forward(x)
+        else:
+            return self.forwardMSF(x)
+
+    def forwardMSF(self, x_pack): # x_pack[0] [16, 2, 3, 512, 512]
+        def flip_add(inp):
+            return (inp[:,0]+inp[:,1].flip(-1))/2
+        def fiveD_forward(inp):
+            N = inp.shape[0]
+            out = self.forward(inp.view(N*2,*(inp.shape[2:])))
+            out = out.view(N,2,*(out.shape[1:]))
+            return out
+        # size = x_pack[0].shape[-2:]
+        # strided_size = imutils.get_strided_size(size, 16)
+        outputs = [flip_add(fiveD_forward(img))
+                       for img in x_pack]
+        strided_size = outputs[0].shape[-2:]
+        strided_cam = torch.sum(torch.stack(
+            [F.interpolate(o, strided_size, mode='bilinear', align_corners=False) for o
+                in outputs]), 0)
+        return strided_cam
 
     def train(self, mode=True):
         for p in self.resnet50.conv1.parameters():
