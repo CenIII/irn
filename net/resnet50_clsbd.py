@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from net import resnet50
 from net.modules import ClsbdCRF
+from misc.imutils import Sobel
 
 # Default config as proposed by Philipp Kraehenbuehl and Vladlen Koltun,
 default_conf = {
@@ -123,6 +124,7 @@ class Net(nn.Module):
 
         self.backbone = nn.ModuleList([self.stage1, self.stage2, self.stage3, self.stage4, self.stage5])
         self.edge_layers = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge3, self.fc_edge4, self.fc_edge5, self.fc_edge6])
+        self.sobel = Sobel()
 
     def infer_clsbd(self, x): # no sigmoid
         x1 = self.stage1(x).detach()
@@ -213,6 +215,7 @@ class Net(nn.Module):
         clsbd = torch.mean(torch.stack(
             [F.interpolate(o, std_size, mode='bilinear', align_corners=False) for o
                 in clsbd_list]), 0)
+        clsbd = self.sobel.thin_edge(clsbd)
         pred, hms = self.infer_crf(clsbd, unary, num_iter=50, mask=mask)
         return pred, hms
 

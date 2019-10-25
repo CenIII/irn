@@ -316,3 +316,90 @@ def colorize_label(label_map, normalize=True, by_hue=True, exclude_zero=False, o
 
         test = np.maximum(test, edge)
     return test
+
+
+class Sobel:
+    def __init__(self):
+
+        self.a = torch.Tensor( [[1, 0, -1],
+                                [2, 0, -2],
+                                [1, 0, -1]]).view((1,1,3,3)).cuda()
+
+        self.b = torch.Tensor( [[1, 2, 1],
+                                [0, 0, 0],
+                                [-1, -2, -1]]).view((1,1,3,3)).cuda()
+        self.blob = torch.Tensor(  [[1, 1, 1],
+                                    [1, 0, 1],
+                                    [1, 1, 1]]).view((1,1,3,3)).cuda()*20
+
+        self.dir_filt = torch.Tensor([[ [1, 0, 0],
+                                        [0, 1, 0],
+                                        [0, 0, 1]],
+                                        [[0, 1, 0],
+                                        [0, 1, 0],
+                                        [0, 1, 0]],
+                                        [[0, 0, 1],
+                                        [0, 1, 0],
+                                        [1, 0, 0]],
+                                        [[0, 0, 0],
+                                        [1, 1, 1],
+                                        [0, 0, 0]]]).view((4,1,3,3)).cuda()
+
+    def nms(self, x):
+        N,C,W,H = x.shape
+        x_unfold = F.unfold(x, 3, 1, 1).view(N,C,3,3,W,H)
+        # 2. check every point whether it's a peak on any direction? gen a mask, 1 if satisfy.
+        x_diff = x_unfold - x[:,:,None,None]
+        mask1 = x_diff.data.new(x_diff.shape).fill_(0)
+        mask1[x_diff<0.] = 1.
+        mask2 = torch.flip(mask1,[2,3])
+        mask = mask1 * mask2
+        mask = mask.view(N,C,-1,W,H).sum(dim=2)
+
+        m1 = mask.data.new(mask.shape).fill_(0)
+        m1[mask>=1.] = 1. # at least 1 dir
+        m1[m1==0.] = 0.
+        x_thin1 = x * m1
+
+        # m2 = mask.data.new(mask.shape).fill_(0)
+        # m2[mask>=3.] = 1. # at least 2 dirs
+        # m2[m2==0.] = 0.
+        # x_thin2 = x_thin1 * m2
+        
+        return x_thin1
+    
+    def denoise(self,x):
+        # N,C,W,H = x.shape
+        # x_unfold = F.unfold(x, 3, 1, 1).view(N,C,3,3,W,H)
+        tmp = F.conv2d(x, self.blob.cuda(), padding=1)
+        mask = tmp.data.new(tmp.shape).fill_(0)
+        mask[tmp>1.] = 1.
+        return x * mask
+    def directed_nms(self,x):
+        tmp = F.conv2d(x, self.dir_filt, padding=1)
+
+        N,C,W,H = x.shape
+        x_unfold = F.unfold(x, 3, 1, 1).view(N,C,3,3,W,H)
+        # 2. check every point whether it's a peak on any direction? gen a mask, 1 if satisfy.
+        x_diff = x_unfold - x[:,:,None,None]
+        mask1 = x_diff.data.new(x_diff.shape).fill_(0)
+        mask1[x_diff<0.] = 1.
+        mask2 = torch.flip(mask1,[2,3])
+        mask = mask1 * mask2
+
+        # import pdb;pdb.set_trace()
+        mask = mask.view(9,W,H)
+        inds = tmp.max(dim=1)[1]
+        mask = torch.gather(mask,dim=0,index=inds).unsqueeze(0)
+
+        return x * mask
+
+    def thin_edge(self,x):
+        # G, D = self.filt(x)
+        # x_thin = self.nms(x, D)
+        # 1. unfold
+        # import pdb;pdb.set_trace()
+        x_nms = self.nms(x)
+        x_thin = self.denoise(x_nms)
+        # x_thin = self.directed_nms(x_thin)
+        return x_thin

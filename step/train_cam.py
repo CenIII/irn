@@ -91,7 +91,7 @@ def run(args):
 		elif rt_key == 'model':
 			model_alternate_train(train_data_loader, model, clsbd, model_optimizer, avg_meter, timer, args)
 		elif rt_key == 'clsbd':
-			clsbd_alternate_train(train_data_loader, model, clsbd, clsbd_optimizer, avg_meter, timer, args)
+			# clsbd_alternate_train(train_data_loader, model, clsbd, clsbd_optimizer, avg_meter, timer, args)
 			clsbd_validate(model.module, clsbd.module, args)
 
 	torch.cuda.empty_cache()
