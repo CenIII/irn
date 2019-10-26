@@ -308,7 +308,7 @@ def _clsbd_validate_infer_worker(process_id, model, clsbd, dataset, args):
 	with torch.no_grad(), cuda.device(process_id):
 
 		model.cuda()
-
+		clsbd.cuda()
 		qdar = tqdm.tqdm(enumerate(data_loader),total=len(data_loader),ascii=True,position=process_id)
 		for iter, pack in qdar:
 			img_name = voc12.dataloader.decode_int_filename(pack['name'][0])
@@ -318,6 +318,7 @@ def _clsbd_validate_infer_worker(process_id, model, clsbd, dataset, args):
 			for k in range(len(pack['img'])):
 				pack['img'][k] = pack['img'][k].cuda(non_blocking=True)
 			# pack['orig_img'] for model forward to make unary, call "make_seg_unary" here
+			# import pdb;pdb.set_trace()
 			seg_output = model(orig_img)
 			unary, _ = make_seg_unary(seg_output,label,args,orig_size=orig_img_size)
 			# pack['img'] for clsbd forward
@@ -337,20 +338,21 @@ def clsbd_validate(model, clsbd, args):
 	# 第二步参考eval_cam.py, 从文件夹读取结果并单线程eval结果
 	model.eval()
 	clsbd.eval()
+	print('Validate: 1. Making crf inference labels...')
 	# step 1: make crf results
 	n_gpus = torch.cuda.device_count()
 	dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.infer_list,
 															 voc12_root=args.voc12_root, scales=args.cam_scales)
 	dataset = torchutils.split_dataset(dataset, n_gpus)
 
-	print('[ ', end='')
-	multiprocessing.spawn(_clsbd_validate_infer_worker, nprocs=n_gpus, args=(model, clsbd, dataset, args), join=True)
-	print(']')
-	# _clsbd_validate_infer_worker(0, model, clsbd, dataset, args)
+	# print('[ ', end='')
+	# multiprocessing.spawn(_clsbd_validate_infer_worker, nprocs=n_gpus, args=(model, clsbd, dataset, args), join=True)
+	# print(']')
+	_clsbd_validate_infer_worker(0, model, clsbd, dataset, args)
 
 	torch.cuda.empty_cache()
 
-
+	print('Validate: 2. Eval labels...')
 	# step 2: eval results
 	dataset = VOCSemanticSegmentationDataset(split=args.chainer_eval_set, data_dir=args.voc12_root)
 	labels = [dataset.get_example_by_keys(i, (1,))[0] for i in range(len(dataset))]

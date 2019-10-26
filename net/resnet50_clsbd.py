@@ -196,7 +196,8 @@ class Net(nn.Module):
         return pred, hms
 
     def infer_crf(self,clsbd, unary, num_iter=1, mask=None):
-        clsbd = torch.sigmoid(clsbd)[...,:unary.shape[-2],:unary.shape[-1]]
+        clsbd = clsbd[...,:unary.shape[-2],:unary.shape[-1]]
+        clsbd = self.sobel.thin_edge(clsbd)
         pred = self.convcrf(unary, clsbd, num_iter=num_iter, mask=mask)
         hms = self.save_hm(unary,clsbd.repeat(1,21,1,1))
         return pred, hms
@@ -213,9 +214,9 @@ class Net(nn.Module):
         clsbd_list = [flip_add(fiveD_forward(img)) for img in img_pack]
         std_size = clsbd_list[0].shape[-2:]
         clsbd = torch.mean(torch.stack(
-            [F.interpolate(o, std_size, mode='bilinear', align_corners=False) for o
+            [torch.sigmoid(F.interpolate(o, std_size, mode='bilinear', align_corners=False)) for o
                 in clsbd_list]), 0)
-        clsbd = self.sobel.thin_edge(clsbd)
+        import pdb;pdb.set_trace()
         pred, hms = self.infer_crf(clsbd, unary, num_iter=50, mask=mask)
         return pred, hms
 
