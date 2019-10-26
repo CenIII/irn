@@ -25,7 +25,7 @@ from torch import multiprocessing, cuda
 from torch.utils.data import DataLoader
 import imageio
 import tqdm
-
+from chainercv.evaluations import calc_semantic_segmentation_confusion
 
 def determine_routine(ep, args):
 	# TODO: need to fix.
@@ -345,10 +345,10 @@ def clsbd_validate(model, clsbd, args):
 															 voc12_root=args.voc12_root, scales=args.cam_scales)
 	dataset = torchutils.split_dataset(dataset, n_gpus)
 
-	# print('[ ', end='')
-	# multiprocessing.spawn(_clsbd_validate_infer_worker, nprocs=n_gpus, args=(model, clsbd, dataset, args), join=True)
-	# print(']')
-	_clsbd_validate_infer_worker(0, model, clsbd, dataset, args)
+	print('[ ', end='')
+	multiprocessing.spawn(_clsbd_validate_infer_worker, nprocs=n_gpus, args=(model, clsbd, dataset, args), join=True)
+	print(']')
+	# _clsbd_validate_infer_worker(0, model, clsbd, dataset, args)
 
 	torch.cuda.empty_cache()
 
@@ -360,6 +360,7 @@ def clsbd_validate(model, clsbd, args):
 	qdar = tqdm.tqdm(dataset.ids,total=len(dataset.ids),ascii=True)
 	for id in qdar:
 		cls_labels = imageio.imread(os.path.join(args.valid_clsbd_out_dir, id + '.png')).astype(np.uint8) + 1
+		# import pdb;pdb.set_trace()
 		cls_labels[cls_labels == 21] = 0
 		preds.append(cls_labels.copy())
 
@@ -380,3 +381,4 @@ def clsbd_validate(model, clsbd, args):
 	print(np.mean(fp[1:]), np.mean(fn[1:]))
 
 	print({'iou': iou, 'miou': np.nanmean(iou)})
+	exit(0)

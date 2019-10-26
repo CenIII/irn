@@ -677,6 +677,7 @@ class ConvCRF(nn.Module):
 
 		norm = False
 		for i in range(num_iter):
+			prediction[:,-1] *= 0.8
 			# △ 1 Message passing
 			messages, input_col, pl = self.kernel.compute(prediction)
 			_,C,K,_,W,H = input_col.shape

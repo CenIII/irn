@@ -216,7 +216,6 @@ class Net(nn.Module):
         clsbd = torch.mean(torch.stack(
             [torch.sigmoid(F.interpolate(o, std_size, mode='bilinear', align_corners=False)) for o
                 in clsbd_list]), 0)
-        import pdb;pdb.set_trace()
         pred, hms = self.infer_crf(clsbd, unary, num_iter=50, mask=mask)
         return pred, hms
 
