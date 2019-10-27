@@ -64,13 +64,13 @@ if __name__ == '__main__':
     parser.add_argument("--cam_learning_rate", required=True, type=float)
     parser.add_argument("--cam_weight_decay", default=1e-4, type=float)
     parser.add_argument("--cam_eval_thres", default=0.15, type=float)
-    parser.add_argument("--cam_scales", default=(1.0,0.5,1.5))# 0.5, 1.5, 2.0)) # NOTE: 1.0 must be the first as network will take 1st as standard img size.
+    parser.add_argument("--cam_scales", default=(1.0,1.5))# 0.5, 1.5, 2.0)) # NOTE: 1.0 must be the first as network will take 1st as standard img size.
     parser.add_argument("--cam_visualize_train", default=False)
     parser.add_argument("--cam_preload", default=False)
     parser.add_argument("--clsbd_preload", default=False)
     # Mining Inter-pixel Relations
-    parser.add_argument("--conf_fg_thres", default=0.1, type=float)
-    parser.add_argument("--conf_bg_thres", default=0.1, type=float)
+    parser.add_argument("--conf_fg_thres", default=0.05, type=float)
+    parser.add_argument("--conf_bg_thres", default=0.05, type=float)
 
     # Inter-pixel Relation Network (IRNet)
     parser.add_argument("--irn_network", default="net.resnet50_clsbd", type=str)
@@ -79,7 +79,7 @@ if __name__ == '__main__':
     parser.add_argument("--irn_num_epoches", default=3, type=int)
     parser.add_argument("--irn_learning_rate", required=True, type=float)
     parser.add_argument("--irn_weight_decay", default=1e-4, type=float)
-    parser.add_argument("--quick_make_sem", default=False)
+    parser.add_argument("--quick_infer", default=False)
     parser.add_argument("--sem_eval_use_crf", default=False)
     # Random Walk Params
     parser.add_argument("--beta", default=10)

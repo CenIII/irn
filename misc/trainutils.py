@@ -158,7 +158,7 @@ def make_seg_unary(seg_output,label,args, mask=None, orig_size=None):
 	bg_conf_pane = torch.argmax(bg_conf, dim=1).unsqueeze(1)
 	max_mask = torch.scatter(max_mask,dim=1,index=bg_conf_pane,value=1.)
 	bg_conf = bg_conf*max_mask
-	bg_conf[:,-1:] = bg_conf[:,-1:]/args.conf_bg_thres*0.7
+	bg_conf[:,-1:] = bg_conf[:,-1:]/args.conf_bg_thres#*0.7
 	# combine two confs.
 	clsbd_label = torch.cat((fg_conf[:,:-1],bg_conf[:,-1:]),dim=1)
 	return clsbd_label, mask
@@ -319,19 +319,18 @@ def _clsbd_validate_infer_worker(process_id, model, clsbd, dataset, args):
 				pack['img'][k] = pack['img'][k].cuda(non_blocking=True)
 			# pack['orig_img'] for model forward to make unary, call "make_seg_unary" here
 			# import pdb;pdb.set_trace()
-			seg_output = model(orig_img)
+			seg_output = model(orig_img)#.forwardMSF(pack['img'])
 			unary, _ = make_seg_unary(seg_output,label,args,orig_size=orig_img_size)
 			# pack['img'] for clsbd forward
-			rw, _ = clsbd.forwardMSF(pack['img'],unary)
+			rw, hms = clsbd.forwardMSF(pack['img'],unary) #(orig_img,unary,num_iter=50)#
 			rw_up = F.interpolate(rw, scale_factor=4, mode='bilinear', align_corners=False)[0, :, :orig_img_size[0], :orig_img_size[1]]
 			rw_up[rw_up<0.5] = 0
 			# ambiguous region classified to bg
 			rw_up[-1] += 1e-5
 			rw_pred = torch.argmax(rw_up, dim=0).cpu().numpy()
-
 			imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '.png'), rw_pred.astype(np.uint8))
-			imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_light.png'), (rw_pred*15).astype(np.uint8))
-
+			# imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_light.png'), (rw_pred*15).astype(np.uint8))
+			# imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_clsbd.png'), (255*hms[-1][0,...,0].cpu().numpy()).astype(np.uint8))
 
 def clsbd_validate(model, clsbd, args):
 	# 分两步，第一步multiprocess infer结果并保存到validate/clsbd/epoch#
@@ -340,45 +339,51 @@ def clsbd_validate(model, clsbd, args):
 	clsbd.eval()
 	print('Validate: 1. Making crf inference labels...')
 	# step 1: make crf results
-	n_gpus = torch.cuda.device_count()
-	dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.infer_list,
-															 voc12_root=args.voc12_root, scales=args.cam_scales)
-	dataset = torchutils.split_dataset(dataset, n_gpus)
+	if args.quick_infer:
+		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.quick_list,
+																voc12_root=args.voc12_root, scales=args.cam_scales)
+		dataset = torchutils.split_dataset(dataset, 1)
 
-	print('[ ', end='')
-	multiprocessing.spawn(_clsbd_validate_infer_worker, nprocs=n_gpus, args=(model, clsbd, dataset, args), join=True)
-	print(']')
-	# _clsbd_validate_infer_worker(0, model, clsbd, dataset, args)
+		_clsbd_validate_infer_worker(0, model, clsbd, dataset, args)
 
-	torch.cuda.empty_cache()
+		torch.cuda.empty_cache()
+		exit(0)
+	else:
+		n_gpus = torch.cuda.device_count()
+		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.infer_list,
+																voc12_root=args.voc12_root, scales=args.cam_scales)
+		dataset = torchutils.split_dataset(dataset, n_gpus)
 
-	print('Validate: 2. Eval labels...')
-	# step 2: eval results
-	dataset = VOCSemanticSegmentationDataset(split=args.chainer_eval_set, data_dir=args.voc12_root)
-	labels = [dataset.get_example_by_keys(i, (1,))[0] for i in range(len(dataset))]
-	preds = []
-	qdar = tqdm.tqdm(dataset.ids,total=len(dataset.ids),ascii=True)
-	for id in qdar:
-		cls_labels = imageio.imread(os.path.join(args.valid_clsbd_out_dir, id + '.png')).astype(np.uint8) + 1
-		# import pdb;pdb.set_trace()
-		cls_labels[cls_labels == 21] = 0
-		preds.append(cls_labels.copy())
+		multiprocessing.spawn(_clsbd_validate_infer_worker, nprocs=n_gpus, args=(model, clsbd, dataset, args), join=True)
 
-	confusion = calc_semantic_segmentation_confusion(preds, labels)[:21, :21] #[labels[ind] for ind in ind_list]
+		torch.cuda.empty_cache()
 
-	gtj = confusion.sum(axis=1)
-	resj = confusion.sum(axis=0)
-	gtjresj = np.diag(confusion)
-	denominator = gtj + resj - gtjresj
-	fp = 1. - gtj / denominator
-	fn = 1. - resj / denominator
-	iou = gtjresj / denominator
+		print('Validate: 2. Eval labels...')
+		# step 2: eval results
+		dataset = VOCSemanticSegmentationDataset(split=args.chainer_eval_set, data_dir=args.voc12_root)
+		labels = [dataset.get_example_by_keys(i, (1,))[0] for i in range(len(dataset))]
+		preds = []
+		qdar = tqdm.tqdm(dataset.ids,total=len(dataset.ids),ascii=True)
+		for id in qdar:
+			cls_labels = imageio.imread(os.path.join(args.valid_clsbd_out_dir, id + '.png')).astype(np.uint8) + 1
+			cls_labels[cls_labels == 21] = 0
+			preds.append(cls_labels.copy())
 
-	print("fp and fn:")
-	print("fp: "+str(np.round(fp,3)))
-	print("fn: "+str(np.round(fn,3)))
-	# print(fp[0], fn[0])
-	print(np.mean(fp[1:]), np.mean(fn[1:]))
+		confusion = calc_semantic_segmentation_confusion(preds, labels)[:21, :21] #[labels[ind] for ind in ind_list]
 
-	print({'iou': iou, 'miou': np.nanmean(iou)})
-	exit(0)
+		gtj = confusion.sum(axis=1)
+		resj = confusion.sum(axis=0)
+		gtjresj = np.diag(confusion)
+		denominator = gtj + resj - gtjresj
+		fp = 1. - gtj / denominator
+		fn = 1. - resj / denominator
+		iou = gtjresj / denominator
+
+		print("fp and fn:")
+		print("fp: "+str(np.round(fp,3)))
+		print("fn: "+str(np.round(fn,3)))
+		# print(fp[0], fn[0])
+		print(np.mean(fp[1:]), np.mean(fn[1:]))
+
+		print({'iou': iou, 'miou': np.nanmean(iou)})
+		exit(0)
