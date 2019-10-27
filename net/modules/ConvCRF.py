@@ -300,14 +300,19 @@ class MessagePassingCol():
 			tmp = self._gaus_list.setdefault(key,[])
 			tmp.append(gaus)
 			self._gaus_list[key] = tmp
+			if not norm == "none":
+				mynorm = self._get_norm(gaus)
+				tmp = self._norm_list.setdefault(key,[])
+				tmp.append(mynorm)
+				self._norm_list[key] = tmp
 
 		for feats, compat, is_clsbd in zip(feat_list, compat_list, is_clsbd_list):
 			gaussian = self._create_convolutional_filters(feats, is_clsbd)
-			if not norm == "none":
-				mynorm = self._get_norm(gaussian)
-				self._norm_list.append(mynorm)
-			else:
-				self._norm_list.append(None)
+			# if not norm == "none":
+			# 	mynorm = self._get_norm(gaussian)
+			# 	self._norm_list.append(mynorm)
+			# else:
+			# 	self._norm_list.append(None)
 			
 			if is_clsbd:
 				add_gaus(-compat*torch.log((1.-gaussian)+1e-5),'pos')
@@ -318,6 +323,9 @@ class MessagePassingCol():
 				add_gaus(-compat*torch.log(1-gaussian+1e-5),'neg')
 		for k,v in self._gaus_list.items():
 			self._gaus_list[k] = sum(v)
+		if not norm == "none":
+			for k,v in self._norm_list.items():
+				self._norm_list[k] = sum(v)
 
 	def _get_norm(self, gaus):
 		norm_tensor = torch.ones([1, 1, self.npixels[0], self.npixels[1]])
@@ -325,7 +333,9 @@ class MessagePassingCol():
 		if self.use_gpu:
 			normalization_feats = normalization_feats.cuda()
 
-		norm_out = self._compute_gaussian(normalization_feats, gaussian=gaus)
+		# TODO: make input for normalization_feats
+		input_col, pl = self._make_input_col(normalization_feats)
+		norm_out = self._compute_gaussian(input_col, gaussian=gaus)
 		return 1 / torch.sqrt(norm_out + 1e-20)
 	
 	def _get_circle_inds(self,span,i):
@@ -499,8 +509,8 @@ class MessagePassingCol():
 		shape = self.shape #input_col.shape
 		num_channels = shape[1]
 		bs = shape[0]
-		# if norm is not None:
-		#     input = input * norm
+		if norm is not None:
+		    input = input * norm
 
 		k_sqr = self.filter_size * self.filter_size
 
@@ -544,8 +554,8 @@ class MessagePassingCol():
 			message = message.view(shape)
 			assert(message.shape == shape)
 
-		# if norm is not None:
-		#     message = norm * message
+		if norm is not None:
+		    message = norm * message
 
 		return message
 		
@@ -557,10 +567,11 @@ class MessagePassingCol():
 		#     pred = 0
 		#     for gaus, norm in zip(self._gaus_list, self._norm_list):
 		#         pred += self._compute_gaussian(input, gaus, norm)
+		assert(len(self._gaus_list) == len(self._norm_list))
 		input_col, pl = self._make_input_col(input)
 		preds = {}
 		for k,v in self._gaus_list.items():
-			preds[k] = self._compute_gaussian(input_col, v)
+			preds[k] = self._compute_gaussian(input_col, v, norm=self._norm_list[k])
 		return preds, input_col, pl
 
 class ConvCRF(nn.Module):
@@ -683,17 +694,8 @@ class ConvCRF(nn.Module):
 			_,C,K,_,W,H = input_col.shape
 			input_col = input_col*self.kernel.kp_mask
 			# △ 2 Compatibility transform
-			# mle setting
-			# message normalize over polarized points, kernel wise.
-			if norm: 
-				kernel_norm = torch.clamp(input_col.sum(dim=2).sum(dim=2),1.).detach()
-				pos_message = messages['pos']/kernel_norm
-				kernel_norm_neg = torch.clamp(self.neg_comp(input_col.view(N,C,-1,1)).view(input_col.shape).sum(dim=2).sum(dim=2),1.).detach()
-				# messages['neg'] = messages['neg']/kernel_norm
-				neg_message = self.neg_comp(messages['neg'])/kernel_norm_neg
-			else:
-				pos_message = messages['pos']
-				neg_message = self.neg_comp(messages['neg'])
+			pos_message = messages['pos']
+			neg_message = self.neg_comp(messages['neg'])
 				
 			# △ 3 Local Update (and normalize)
 			if self.training:
@@ -706,6 +708,7 @@ class ConvCRF(nn.Module):
 				neg_sum = torch.clamp((pl_pred*neg_input_col).sum().detach(),1.)
 
 				return pos_message*pl_pred, neg_message*pl_pred, pos_fg_sum, pos_bg_sum, neg_sum
+			import pdb;pdb.set_trace()
 			prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * (self.pos_weight*pos_message + self.neg_weight*neg_message)
 			prediction = F.softmax(prediction, dim=1)
 			if mask is not None:
