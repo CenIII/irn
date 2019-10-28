@@ -247,7 +247,7 @@ def polarness(x): #[1, 21, 42, 63]
 	D = x.shape[1] #len(keys) #
 	x_t = x#[:,keys]
 	# x_t /= x_t.sum(dim=1,keepdim=True)
-	entropy = (- x_t * torch.log(x_t+1e-5)).sum(dim=1,keepdim=True)
+	entropy = (- x_t * torch.log(torch.clamp(x_t,1e-5,1.))).sum(dim=1,keepdim=True)
 	if D > 1:
 		pl = 1. - entropy / np.log(D)
 	else: 
@@ -476,7 +476,7 @@ class MessagePassingCol():
 		# if key == 'pos':
 		# # polarization as 1. 
 		pl = polarness(input)  #[1, 1, 42, 63]
-		input = input * pl
+		# input = input * pl
 		if self.pyinn:
 			input_col = P.im2col(input, self.filter_size, 1, self.span)
 		else:
@@ -677,7 +677,8 @@ class ConvCRF(nn.Module):
 
 		norm = False
 		for i in range(num_iter):
-			prediction[:,-1] *= 0.7
+			prediction[:,-1] *= 0.75
+			# prediction /= prediction.sum(dim=1, keepdim=True)
 			# △ 1 Message passing
 			messages, input_col, pl = self.kernel.compute(prediction)
 			_,C,K,_,W,H = input_col.shape

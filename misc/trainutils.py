@@ -161,6 +161,7 @@ def make_seg_unary(seg_output,label,args, mask=None, orig_size=None):
 	bg_conf[:,-1:] = bg_conf[:,-1:]/args.conf_bg_thres#*0.7
 	# combine two confs.
 	clsbd_label = torch.cat((fg_conf[:,:-1],bg_conf[:,-1:]),dim=1)
+	clsbd_label[clsbd_label>0] = 1.
 	return clsbd_label, mask
 	# 1. upsample
 
@@ -319,7 +320,7 @@ def _clsbd_validate_infer_worker(process_id, model, clsbd, dataset, args):
 				pack['img'][k] = pack['img'][k].cuda(non_blocking=True)
 			# pack['orig_img'] for model forward to make unary, call "make_seg_unary" here
 			# import pdb;pdb.set_trace()
-			seg_output = model(orig_img)#.forwardMSF(pack['img'])
+			seg_output = model.forwardMSF(pack['img']) #(orig_img)#
 			unary, _ = make_seg_unary(seg_output,label,args,orig_size=orig_img_size)
 			# pack['img'] for clsbd forward
 			rw, hms = clsbd.forwardMSF(pack['img'],unary) #(orig_img,unary,num_iter=50)#
