@@ -265,7 +265,7 @@ class MessagePassingCol():
 	def __init__(self, feat_list, compat_list, is_clsbd_list, merge, npixels, nclasses,
 				 norm="sym",
 				 filter_size=5, clip_edges=0, use_gpu=False,
-				 blur=1, matmul=False, verbose=False, pyinn=False, kernel_paths=None, kp_mask=None):
+				 blur=1, matmul=False, verbose=False, pyinn=False, kernel_paths=None, kp_mask=None, is_training=False):
 
 		assert(use_gpu)
 
@@ -319,6 +319,8 @@ class MessagePassingCol():
 		for k,v in self._gaus_list.items():
 			self._gaus_list[k] = sum(v)
 
+		self.training = is_training
+		
 	def _get_norm(self, gaus):
 		norm_tensor = torch.ones([1, 1, self.npixels[0], self.npixels[1]])
 		normalization_feats = torch.autograd.Variable(norm_tensor)
@@ -659,7 +661,8 @@ class ConvCRF(nn.Module):
 			blur=self.blur,
 			pyinn=self.pyinn,
 			kernel_paths=self.kernel_paths_mat,
-			kp_mask=self.kp_mask)
+			kp_mask=self.kp_mask,
+			is_training=self.training)
 
 	def inference(self, unary, clsbd, num_iter=3, mask=None):
 		# NOTE: assume unary has already been softmax'ed. 
