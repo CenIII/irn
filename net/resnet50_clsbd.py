@@ -47,7 +47,7 @@ infer_conf = {
     'norm': 'none',
     'weight': 'vector',
     "unary_weight": 1.,
-    "weight_init": 0.9,
+    "weight_init": 1.,
     "pos_weight":1.,
     "neg_weight":1.,
 

@@ -476,7 +476,8 @@ class MessagePassingCol():
 		# if key == 'pos':
 		# # polarization as 1. 
 		pl = polarness(input)  #[1, 1, 42, 63]
-		# input = input * pl
+		if self.training:
+			input = input * pl
 		if self.pyinn:
 			input_col = P.im2col(input, self.filter_size, 1, self.span)
 		else:
