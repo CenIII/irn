@@ -44,10 +44,10 @@ infer_conf = {
     'filter_size': 9,
     'blur': 2,
     'merge': False,
-    'norm': 'none',
+    'norm': 'sym',
     'weight': 'vector',
     "unary_weight": 1.,
-    "weight_init": 0.9,
+    "weight_init": 1.,
     "pos_weight":1.,
     "neg_weight":1.,
 
@@ -58,8 +58,8 @@ infer_conf = {
     'final_softmax': False,
 
     'pos_feats': {
-        'sdims': 50,
-        'compat': 0.,
+        'sdims': 10,
+        'compat': 0.02,
     },
     'col_feats': {
         # 'sdims': 80,
@@ -217,7 +217,7 @@ class Net(nn.Module):
         clsbd = torch.mean(torch.stack(
             [torch.sigmoid(F.interpolate(o, std_size, mode='bilinear', align_corners=False)) for o
                 in clsbd_list]), 0)
-        pred, hms = self.infer_crf(clsbd, unary, num_iter=50, mask=mask)
+        pred, hms = self.infer_crf(clsbd, unary, num_iter=100, mask=mask)
         return pred, hms
 
     def getHeatmaps(self, hms, classid):

@@ -246,7 +246,7 @@ def polarness(x): #[1, 21, 42, 63]
 	# keys = np.unique(label.cpu())[:-1].astype(np.int32)
 	D = x.shape[1] #len(keys) #
 	x_t = x#[:,keys]
-	# x_t /= x_t.sum(dim=1,keepdim=True)
+	x_t /= x_t.sum(dim=1,keepdim=True)
 	entropy = (- x_t * torch.log(x_t+1e-5)).sum(dim=1,keepdim=True)
 	if D > 1:
 		pl = 1. - entropy / np.log(D)
@@ -291,7 +291,7 @@ class MessagePassingCol():
 		self.matmul = matmul
 
 		self._gaus_list = {}
-		self._norm_list = []
+		self._norm_list = {}
 
 		self.kernel_paths = kernel_paths
 		self.kp_mask = torch.from_numpy(kp_mask[None,None,:,:,None,None]).type(torch.cuda.FloatTensor)
@@ -315,12 +315,13 @@ class MessagePassingCol():
 			# 	self._norm_list.append(None)
 			
 			if is_clsbd:
-				add_gaus(-compat*torch.log((1.-gaussian)+1e-5),'pos')
+				add_gaus(-compat*torch.log(torch.clamp((1.-gaussian),1e-4,1.)),'pos')
 				gaussian_neg = gaussian.clone()
 				gaussian_neg[:,:,self.span,self.span] = 1.
-				add_gaus(compat*(-torch.log(gaussian_neg+1e-5)),'neg')
+				add_gaus(compat*(-torch.log(torch.clamp(gaussian_neg,1e-4,1.))),'neg')
 			else:
-				add_gaus(-compat*torch.log(1-gaussian+1e-5),'neg')
+				# TODO: exclude this... this cause fail in norm...
+				add_gaus(-compat*torch.log(torch.clamp(1-gaussian,1e-4,1.)),'smt')
 		for k,v in self._gaus_list.items():
 			self._gaus_list[k] = sum(v)
 		if not norm == "none":
@@ -459,7 +460,9 @@ class MessagePassingCol():
 			bs, 1, self.filter_size, self.filter_size,
 			npixels[0], npixels[1])
 
-	def _make_input_col(self,input):
+	def _make_input_col(self,input, norm=None):
+		if norm is not None:
+		    input = input * norm
 		shape = input.shape
 		num_channels = shape[1]
 		bs = shape[0]
@@ -486,7 +489,7 @@ class MessagePassingCol():
 		# if key == 'pos':
 		# # polarization as 1. 
 		pl = polarness(input)  #[1, 1, 42, 63]
-		input = input * pl
+		# input = input * pl
 		if self.pyinn:
 			input_col = P.im2col(input, self.filter_size, 1, self.span)
 		else:
@@ -509,8 +512,6 @@ class MessagePassingCol():
 		shape = self.shape #input_col.shape
 		num_channels = shape[1]
 		bs = shape[0]
-		if norm is not None:
-		    input = input * norm
 
 		k_sqr = self.filter_size * self.filter_size
 
@@ -553,7 +554,7 @@ class MessagePassingCol():
 			message = message.contiguous()
 			message = message.view(shape)
 			assert(message.shape == shape)
-
+		
 		if norm is not None:
 		    message = norm * message
 
@@ -567,10 +568,13 @@ class MessagePassingCol():
 		#     pred = 0
 		#     for gaus, norm in zip(self._gaus_list, self._norm_list):
 		#         pred += self._compute_gaussian(input, gaus, norm)
-		assert(len(self._gaus_list) == len(self._norm_list))
-		input_col, pl = self._make_input_col(input)
+		
+		# assert(len(self._gaus_list) == len(self._norm_list))
+		# input_col, pl = self._make_input_col(input)
 		preds = {}
 		for k,v in self._gaus_list.items():
+			input_col, pl = self._make_input_col(input,norm=self._norm_list[k])
+			# import pdb;pdb.set_trace()
 			preds[k] = self._compute_gaussian(input_col, v, norm=self._norm_list[k])
 		return preds, input_col, pl
 
@@ -688,7 +692,7 @@ class ConvCRF(nn.Module):
 
 		norm = False
 		for i in range(num_iter):
-			prediction[:,-1] *= 0.7
+			prediction[:,-1] *= 0.2
 			# △ 1 Message passing
 			messages, input_col, pl = self.kernel.compute(prediction)
 			_,C,K,_,W,H = input_col.shape
@@ -696,7 +700,7 @@ class ConvCRF(nn.Module):
 			# △ 2 Compatibility transform
 			pos_message = messages['pos']
 			neg_message = self.neg_comp(messages['neg'])
-				
+			smt_message = self.neg_comp(messages['smt'])
 			# △ 3 Local Update (and normalize)
 			if self.training:
 				pl_pred = (prediction*pl)
@@ -708,8 +712,9 @@ class ConvCRF(nn.Module):
 				neg_sum = torch.clamp((pl_pred*neg_input_col).sum().detach(),1.)
 
 				return pos_message*pl_pred, neg_message*pl_pred, pos_fg_sum, pos_bg_sum, neg_sum
-			import pdb;pdb.set_trace()
-			prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * (self.pos_weight*pos_message + self.neg_weight*neg_message)
+			
+			prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * (self.pos_weight*pos_message + self.neg_weight*(smt_message+neg_message))
+			# import pdb;pdb.set_trace()
 			prediction = F.softmax(prediction, dim=1)
 			if mask is not None:
 				prediction = prediction * mask
@@ -719,6 +724,7 @@ class ConvCRF(nn.Module):
 			# prediction = prediction*pl_pred#F.softmax(prediction*pl_pred, dim=1)
 		# prediction = (prediction*pl_pred.squeeze())#.view(N,-1).sum(dim=1)
 		# prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * (self.pos_weight*pos_message/pos_norm + self.neg_weight*neg_message/neg_norm2)
+		# import pdb;pdb.set_trace()
 		return prediction#, loss
 
 

@@ -161,6 +161,8 @@ def make_seg_unary(seg_output,label,args, mask=None, orig_size=None):
 	bg_conf[:,-1:] = bg_conf[:,-1:]/args.conf_bg_thres#*0.7
 	# combine two confs.
 	clsbd_label = torch.cat((fg_conf[:,:-1],bg_conf[:,-1:]),dim=1)
+	clsbd_label[clsbd_label>0] = 1.
+	# clsbd_label[:,-1] *= 0.2
 	return clsbd_label, mask
 	# 1. upsample
 
@@ -315,6 +317,7 @@ def _clsbd_validate_infer_worker(process_id, model, clsbd, dataset, args):
 			orig_img_size = np.asarray(pack['size'])
 			orig_img = pack['orig_img'].cuda(non_blocking=True)
 			label = pack['label'].cuda(non_blocking=True)
+			keys=label[0].nonzero()[:,0].cpu().numpy()
 			for k in range(len(pack['img'])):
 				pack['img'][k] = pack['img'][k].cuda(non_blocking=True)
 			# pack['orig_img'] for model forward to make unary, call "make_seg_unary" here
@@ -324,12 +327,19 @@ def _clsbd_validate_infer_worker(process_id, model, clsbd, dataset, args):
 			# pack['img'] for clsbd forward
 			rw, hms = clsbd.forwardMSF(pack['img'],unary) #(orig_img,unary,num_iter=50)#
 			rw_up = F.interpolate(rw, scale_factor=4, mode='bilinear', align_corners=False)[0, :, :orig_img_size[0], :orig_img_size[1]]
-			rw_up[rw_up<0.5] = 0
+			
+			# pl = (1 - (-rw_up*torch.log(rw_up)).sum(dim=0)/np.log(21)).cpu().numpy()
+
+			# rw_up[rw_up<0.05] = 0
+			# import pdb;pdb.set_trace()
+			rw_up *= label[0][:,None,None]
 			# ambiguous region classified to bg
-			rw_up[-1] += 1e-5
+			# rw_up[-1] += 1e-5
 			rw_pred = torch.argmax(rw_up, dim=0).cpu().numpy()
+			# rw_pred[rw_pred not in keys]=20
+
 			imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '.png'), rw_pred.astype(np.uint8))
-			# imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_light.png'), (rw_pred*15).astype(np.uint8))
+			imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_light.png'), (rw_pred*15).astype(np.uint8))
 			# imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_clsbd.png'), (255*hms[-1][0,...,0].cpu().numpy()).astype(np.uint8))
 
 def clsbd_validate(model, clsbd, args):
