@@ -677,7 +677,9 @@ class ConvCRF(nn.Module):
 
 		norm = False
 		for i in range(num_iter):
-			prediction[:,-1] *= 0.75
+			prediction[:,-1] *= 0.8
+			# import pdb;pdb.set_trace()
+			prediction[:,:-1] = (prediction[:,:-1]+1e-5)*(1 - prediction[:,-1:])/(prediction[:,:-1]+1e-5).sum(dim=1, keepdim=True)
 			# prediction /= prediction.sum(dim=1, keepdim=True)
 			# △ 1 Message passing
 			messages, input_col, pl = self.kernel.compute(prediction)

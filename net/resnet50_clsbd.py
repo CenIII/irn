@@ -197,8 +197,8 @@ class Net(nn.Module):
 
     def infer_crf(self,clsbd, unary, num_iter=1, mask=None):
         clsbd = clsbd[...,:unary.shape[-2],:unary.shape[-1]]
-        if not self.training:
-            clsbd = self.sobel.thin_edge(clsbd)
+        # if not self.training:
+        #     clsbd = self.sobel.thin_edge(clsbd)
         pred = self.convcrf(unary, clsbd, num_iter=num_iter, mask=mask)
         hms = self.save_hm(unary,clsbd.repeat(1,21,1,1))
         return pred, hms

@@ -325,7 +325,7 @@ def _clsbd_validate_infer_worker(process_id, model, clsbd, dataset, args):
 			# pack['img'] for clsbd forward
 			rw, hms = clsbd.forwardMSF(pack['img'],unary) #(orig_img,unary,num_iter=50)#
 			rw_up = F.interpolate(rw, scale_factor=4, mode='bilinear', align_corners=False)[0, :, :orig_img_size[0], :orig_img_size[1]]
-			rw_up[rw_up<0.5] = 0
+			rw_up[rw_up<0.8] = 0
 			# ambiguous region classified to bg
 			rw_up[-1] += 1e-5
 			rw_pred = torch.argmax(rw_up, dim=0).cpu().numpy()
