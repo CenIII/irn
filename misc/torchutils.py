@@ -7,15 +7,17 @@ import math
 
 class PolyOptimizer(torch.optim.SGD):
 
-	def __init__(self, params, lr, weight_decay, max_step, momentum=0.9):
+	def __init__(self, params, lr, weight_decay, max_step, momentum=0.9, set_step=0):
 		super().__init__(params, lr, weight_decay)
 
-		self.global_step = 0
+		self.global_step = set_step
 		self.max_step = max_step
 		self.momentum = momentum
 
 		self.__initial_lr = [group['lr'] for group in self.param_groups]
 
+	def is_max_step(self):
+		return (self.max_step - self.global_step) < 5
 
 	def step(self, closure=None):
 

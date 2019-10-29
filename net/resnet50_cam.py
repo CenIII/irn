@@ -40,12 +40,13 @@ class Net(nn.Module):
 
         self.classifier = _ASPP(2048, 21, [6, 12, 18, 24]) #nn.Conv2d(2048, 20, 1, bias=False)
 
+        # self.backbone_half = nn.ModuleList([self.stage3, self.stage4])
         self.backbone = nn.ModuleList([self.stage1, self.stage2, self.stage3, self.stage4])
         self.newly_added = nn.ModuleList([self.classifier])
 
     def _forward(self, x):
         x = self.stage1(x)
-        x = self.stage2(x).detach()
+        x = self.stage2(x)#.detach()
 
         x = self.stage3(x)
         x = self.stage4(x)  # N, 2048, 32, 32
@@ -86,11 +87,13 @@ class Net(nn.Module):
             p.requires_grad = False
         for p in self.resnet50.bn1.parameters():
             p.requires_grad = False
+        return self
 
+    def init_trainable_parameters(self):
+        return (list(self.backbone[2:].parameters()), list(self.newly_added.parameters()))
+    
     def trainable_parameters(self):
-
         return (list(self.backbone.parameters()), list(self.newly_added.parameters()))
-
 
 class CAM(Net):
 

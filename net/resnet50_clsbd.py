@@ -142,46 +142,7 @@ class Net(nn.Module):
         edge_out = edge_up
         return edge_out
 
-    # def make_unary_for_infer(self, unary_raw, label):
-    #     # TODO: unify format of unary_raw for both train and infer
-    #     # unary_raw [N, 21, W, H]
-    #     # 1. rescale
-    #     # unary_raw = F.interpolate(unary_raw, label.shape[-2:], mode='bilinear', align_corners=False)#[0] #torch.unsqueeze(unary_raw, 0)
-    #     # 2. add background
-    #     # unary_raw /= 5.
-    #     unary_raw = F.pad(unary_raw, (0, 0, 0, 0, 1, 1, 0, 0), mode='constant',value=1.)
-        
-    #     # 3. create and apply mask
-    #     label[label==255.] = 21
-    #     label = label.unsqueeze(1)
-    #     mask = torch.zeros_like(unary_raw).cuda()
-    #     mask = mask.scatter_(1,label.type(torch.cuda.LongTensor),1.)
-    #     unary = (unary_raw * mask)[:,:-1]
-    #     # unary[unary>0.] = 150.
-    #     # tmp = mask[:,:-1].sum(dim=2,keepdim=True).sum(dim=3,keepdim=True) # [N,21,1,1]
-    #     # tmp[tmp>0.] = 1.
-    #     # unary += tmp
-    #     # unary[:,0] = 1.
-    #     return unary 
-
-    # def make_unary_for_train(self, label):
-    #     # unary_raw [N, 21, W, H]
-    #     # 1. rescale
-    #     # unary_raw = F.interpolate(unary_raw, label.shape[-2:], mode='bilinear', align_corners=False)#[0] #torch.unsqueeze(unary_raw, 0)
-    #     # # 2. add background
-    #     # unary_raw = F.pad(unary_raw, (0, 0, 0, 0, 1, 1, 0, 0), mode='constant',value=1.)
-    #     # 3. create and apply mask
-    #     label[label==255.] = 21
-    #     label = label.unsqueeze(1)
-    #     N,_,W,H = label.shape
-    #     mask = torch.zeros(N,22,W,H).cuda()
-    #     mask = mask.scatter_(1,label.type(torch.cuda.LongTensor),1.)
-    #     # unary = (unary_raw * mask)[:,:-1]
-    #     unary = mask[:,:-1]
-    #     unary[unary>0.] = 100.
-    #     return unary 
-
-    def forward(self, img, unary, num_iter=1, mask=None):
+    def _forward(self, img, unary, num_iter=1, mask=None):
         # NOTE: assume unary (label) is well prepared as a tensor.
         # unary_raw = self.cam_net(x)
         # unary_raw = F.relu(unary_raw).detach()
@@ -195,15 +156,24 @@ class Net(nn.Module):
         hms = self.save_hm(unary,clsbd.repeat(1,21,1,1))
         return pred, hms
 
+    def forward(self, img, unary, num_iter=1, mask=None, MSF=False):
+        if not MSF:
+            return self._forward(img, unary, num_iter=num_iter, mask=mask)
+        else:
+            return self.forwardMSF(img, unary, num_iter=num_iter, mask=mask)
+
     def infer_crf(self,clsbd, unary, num_iter=1, mask=None):
         clsbd = clsbd[...,:unary.shape[-2],:unary.shape[-1]]
         # if not self.training:
         #     clsbd = self.sobel.thin_edge(clsbd)
         pred = self.convcrf(unary, clsbd, num_iter=num_iter, mask=mask)
-        hms = self.save_hm(unary,clsbd.repeat(1,21,1,1))
+        hms = [unary,clsbd.repeat(1,21,1,1)]
+        if not self.training:
+            hms.append(pred)
+        hms = self.save_hm(*hms)
         return pred, hms
 
-    def forwardMSF(self,img_pack, unary, mask=None):
+    def forwardMSF(self,img_pack, unary, num_iter=50, mask=None):
         def flip_add(inp):
             return (inp[:,0]+inp[:,1].flip(-1))/2
         def fiveD_forward(inp):
@@ -217,7 +187,7 @@ class Net(nn.Module):
         clsbd = torch.mean(torch.stack(
             [torch.sigmoid(F.interpolate(o, std_size, mode='bilinear', align_corners=False)) for o
                 in clsbd_list]), 0)
-        pred, hms = self.infer_crf(clsbd, unary, num_iter=50, mask=mask)
+        pred, hms = self.infer_crf(clsbd, unary, num_iter=num_iter, mask=mask)
         return pred, hms
 
     def getHeatmaps(self, hms, classid):
@@ -242,11 +212,13 @@ class Net(nn.Module):
         self.backbone.eval()
         self.convcrf = ClsbdCRF(default_conf, nclasses=21).cuda()
         self.convcrf.train()
+        return self
 
     def eval(self,mode=True):
         super().eval()
         self.convcrf = ClsbdCRF(infer_conf, nclasses=21).cuda()
         self.convcrf.eval()
+        return self
 
 class EdgeDisplacement(Net):
 

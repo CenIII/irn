@@ -59,7 +59,7 @@ if __name__ == '__main__':
     parser.add_argument("--cam_network", default="net.resnet50_cam", type=str)
     parser.add_argument("--cam_crop_size", default=512, type=int)
     parser.add_argument("--cam_batch_size", required=True, type=int)
-    parser.add_argument("--cam_num_epoches", default=11, type=int)
+    parser.add_argument("--cam_num_epoches", default=13, type=int)
     parser.add_argument("--cam_start_epoch", default=5, type=int)
     parser.add_argument("--cam_learning_rate", required=True, type=float)
     parser.add_argument("--cam_weight_decay", default=1e-4, type=float)
@@ -69,8 +69,13 @@ if __name__ == '__main__':
     parser.add_argument("--cam_preload", default=False)
     parser.add_argument("--clsbd_preload", default=False)
     # Mining Inter-pixel Relations
-    parser.add_argument("--conf_fg_thres", default=0.05, type=float)
+    parser.add_argument("--seg_learning_rate", required=True, type=float)
+    parser.add_argument("--seg_weight_decay", default=5e-4, type=float)
+
+    parser.add_argument("--conf_fg_thres", default=0.3, type=float)
     parser.add_argument("--conf_bg_thres", default=0.05, type=float)
+    parser.add_argument("--unary_fg_thres", default=0.05, type=float)
+    parser.add_argument("--unary_bg_thres", default=0.05, type=float)
 
     # Inter-pixel Relation Network (IRNet)
     parser.add_argument("--irn_network", default="net.resnet50_clsbd", type=str)

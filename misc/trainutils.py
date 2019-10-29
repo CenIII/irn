@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 from torch.backends import cudnn
 cudnn.enabled = True
 from torch.utils.data import DataLoader
@@ -26,7 +27,11 @@ from torch.utils.data import DataLoader
 import imageio
 import tqdm
 from chainercv.evaluations import calc_semantic_segmentation_confusion
+import copy 
 
+'''
+utils
+'''
 def determine_routine(ep, args):
 	# TODO: need to fix.
 	routine = 'init'
@@ -39,6 +44,34 @@ def determine_routine(ep, args):
 			routine = 'model'
 	return routine
 
+def eval_metrics(split_name, label_dir, args):
+	dataset = VOCSemanticSegmentationDataset(split=split_name, data_dir=args.voc12_root)
+	labels = [dataset.get_example_by_keys(i, (1,))[0] for i in range(len(dataset))]
+	preds = []
+	qdar = tqdm.tqdm(dataset.ids,total=len(dataset.ids),ascii=True)
+	for id in qdar:
+		cls_labels = imageio.imread(os.path.join(label_dir, id + '.png')).astype(np.uint8) + 1
+		cls_labels[cls_labels == 21] = 0
+		preds.append(cls_labels.copy())
+
+	confusion = calc_semantic_segmentation_confusion(preds, labels)[:21, :21] #[labels[ind] for ind in ind_list]
+
+	gtj = confusion.sum(axis=1)
+	resj = confusion.sum(axis=0)
+	gtjresj = np.diag(confusion)
+	denominator = gtj + resj - gtjresj
+	fp = 1. - gtj / denominator
+	fn = 1. - resj / denominator
+	iou = gtjresj / denominator
+
+	print("fp and fn:")
+	print("fp: "+str(np.round(fp,3)))
+	print("fn: "+str(np.round(fn,3)))
+	# print(fp[0], fn[0])
+	print(np.mean(fp[1:]), np.mean(fn[1:]))
+	miou = np.nanmean(iou)
+	print({'iou': iou, 'miou': miou})
+	return miou
 '''
 Visualize
 '''
@@ -146,8 +179,8 @@ def make_seg_unary(seg_output,label,args, mask=None, orig_size=None):
 	fg = norm_seg[:,:-1]
 	# crf fg_conf
 	# crf bg_conf
-	fg_conf = F.pad(fg, (0, 0, 0, 0, 0, 1, 0, 0), mode='constant',value=args.conf_fg_thres)
-	bg_conf = F.pad(fg, (0, 0, 0, 0, 0, 1, 0, 0), mode='constant',value=args.conf_bg_thres)
+	fg_conf = F.pad(fg, (0, 0, 0, 0, 0, 1, 0, 0), mode='constant',value=args.unary_fg_thres)
+	bg_conf = F.pad(fg, (0, 0, 0, 0, 0, 1, 0, 0), mode='constant',value=args.unary_bg_thres)
 	
 	max_mask = fg_conf.data.new(fg_conf.shape).fill_(0.)
 	fg_conf_pane = torch.argmax(fg_conf, dim=1).unsqueeze(1)
@@ -163,52 +196,131 @@ def make_seg_unary(seg_output,label,args, mask=None, orig_size=None):
 	clsbd_label = torch.cat((fg_conf[:,:-1],bg_conf[:,-1:]),dim=1)
 	clsbd_label[clsbd_label>0] = 1.
 	return clsbd_label, mask
-	# 1. upsample
 
-	# 2. softmax
+def make_seg_label(crf_out):
+	# import pdb;pdb.set_trace()
+	crf_out = F.interpolate(crf_out, (32,32), mode='bilinear', align_corners=False) #[16, 21, 128, 128]
+	highent = (-crf_out * torch.log(torch.clamp(crf_out,1e-5,1.))).sum(dim=1)/np.log(21)
+	highent[highent>0.8] = 1.
+	highent[highent<1.] = 0
+	# crf_out[crf_out<0.3] = 0
+	# crf_out[:,-1] += 1e-5
+	label = torch.argmax(crf_out,dim=1)
+	label[highent>0.5] = 21
+	return label
 
-	# 3. obtain argmax mask???
+def compute_seg_loss(crit, seg_out, seg_label):
+	seg_out_lg = F.log_softmax(seg_out,dim=1)
+	loss = crit(seg_out_lg, seg_label)
+	return loss
 
-	# 4. select target classes
+def model_alternate_train(train_data_loader, model, model_inf, clsbd, optimizer, avg_meter, timer, args, ep):
+	model = torch.nn.DataParallel(model).cuda().train()
+	model.module.train()
+	clsbd = torch.nn.DataParallel(clsbd).cuda().eval()
+	clsbd.module.eval()
+	model_inf = torch.nn.DataParallel(model_inf).cuda().eval()
+	model_inf.module.eval()
 
-	# 5. thresholding fg, bg???
-	# pass
-
-def compute_seg_loss():
-	pass
-
-def model_alternate_train(train_data_loader, model, clsbd, optimizer, avg_meter, timer, args):
-	model.train()
-	clsbd.eval()
+	cb = [None, None, None, None]
+	img_denorm = torchutils.ImageDenorm()
+	crit = nn.NLLLoss(ignore_index=21)
 	for step, pack in enumerate(train_data_loader):
 
-		img = pack['img'].cuda()
-		label = pack['label'].cuda(non_blocking=True)
+		img = pack['img'].cuda()  # ([16, 3, 512, 512])
+		img_pack = [pack['msf_img'][i].cuda() for i in range(len(pack['msf_img']))]
+		label = pack['label'].cuda(non_blocking=True)  # [16, 21]
+		mask = pack['mask'].cuda(non_blocking=True)  # [16, 21]
 
+		# 2. label making
+		with torch.no_grad():
+			seg_output_aslabel = model_inf(img_pack, MSF=True)
+			seg_unary, mask = make_seg_unary(seg_output_aslabel, label, args, mask=mask) # format: one channel image, each pixel denoted by class num.
+			crf_output, hms = clsbd(img_pack, seg_unary, num_iter=50, mask=mask, MSF=True)
+			seg_label = make_seg_label(crf_output)
+		# 1. forward pass model
 		seg_output = model(img)
-		seg_unary = make_seg_unary(seg_output, label, args) # format: one channel image, each pixel denoted by class num.
-		crf_output, hms = clsbd(img, seg_unary)
-		loss = compute_seg_loss(seg_output,crf_output)
+		if (optimizer.global_step-1)%20 == 0 and args.cam_visualize_train:
+			visualize(img, clsbd.module, hms, label, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir_model)
+			visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir_model, origin=0, descr='unary')
+			visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir_model, origin=-1, descr='label')
+		# 3. loss computing
+		# import pdb;pdb.set_trace()
+		loss = compute_seg_loss(crit, seg_output, seg_label)
 
 		avg_meter.add({'loss1': loss.item()})
-		with autograd.detect_anomaly():
-			optimizer.zero_grad()
-			loss.backward()
-			clip_grad_norm_(model.parameters(),1.)
-			optimizer.step()
+		# with autograd.detect_anomaly():
+		optimizer.zero_grad()
+		loss.backward()
+		# clip_grad_norm_(model.parameters(),1.)
+		optimizer.step()
 
-		if (optimizer.global_step-1)%100 == 0:
-			timer.update_progress(optimizer.global_step / max_step)
+		if (optimizer.global_step-1)%20 == 0:
+			timer.update_progress(optimizer.global_step / optimizer.max_step)
 
-			print('step:%5d/%5d' % (optimizer.global_step - 1, max_step),
+			print('step:%5d/%5d' % (optimizer.global_step - 1, optimizer.max_step),
 					'loss:%.4f' % (avg_meter.pop('loss1')),
 					'imps:%.1f' % ((step + 1) * args.cam_batch_size / timer.get_stage_elapsed()),
 					'lr: %.4f' % (optimizer.param_groups[0]['lr']),
 					'etc:%s' % (timer.str_estimated_complete()), flush=True)
 	else:
-		# TODO: validation.
 		timer.reset_stage()
-		torch.save(model.module.state_dict(), args.irn_weights_name + '.pth')
+		torch.save(model.module.state_dict(), args.cam_weights_name + '_' + str(ep) + '.pth')
+	return model.module, optimizer.is_max_step()
+
+def _seg_validate_infer_worker(process_id, model, dataset, args):
+	databin = dataset[process_id]
+	n_gpus = torch.cuda.device_count()
+	data_loader = DataLoader(databin, batch_size=1, shuffle=False, num_workers=args.num_workers // n_gpus, pin_memory=False)
+
+	with torch.no_grad(), cuda.device(process_id):
+		model.cuda()
+		qdar = tqdm.tqdm(enumerate(data_loader),total=len(data_loader),ascii=True,position=process_id)
+		for iter, pack in qdar:
+			img_name = voc12.dataloader.decode_int_filename(pack['name'][0])
+			orig_img_size = np.asarray(pack['size'])
+			label = pack['label'].cuda(non_blocking=True)
+			for k in range(len(pack['img'])):
+				pack['img'][k] = pack['img'][k].cuda(non_blocking=True)
+			
+			seg_output = model.forwardMSF(pack['img']) #(orig_img)#
+			
+			rw_up = F.interpolate(seg_output, scale_factor=16, mode='bilinear', align_corners=False)[0, :, :orig_img_size[0], :orig_img_size[1]]
+			rw_pred = torch.argmax(rw_up, dim=0).cpu().numpy()
+			imageio.imsave(os.path.join(args.valid_model_out_dir, img_name + '.png'), rw_pred.astype(np.uint8))
+			imageio.imsave(os.path.join(args.valid_model_out_dir, img_name + '_light.png'), (rw_pred*15).astype(np.uint8))
+			# imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_clsbd.png'), (255*hms[-1][0,...,0].cpu().numpy()).astype(np.uint8))
+
+def model_validate(model, args):
+	# import pdb;pdb.set_trace()
+	# 分两步，第一步multiprocess infer结果并保存到validate/model/epoch#
+	# 第二步参考eval_cam.py, 从文件夹读取结果并单线程eval结果
+	model.eval()
+	print('Validate: 1. Making seg preds...')
+	# step 1: make crf results
+	if args.quick_infer:
+		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.quick_list,
+																voc12_root=args.voc12_root, scales=args.cam_scales)
+		dataset = torchutils.split_dataset(dataset, 1)
+
+		_seg_validate_infer_worker(0, model, dataset, args)
+
+		torch.cuda.empty_cache()
+		exit(0)
+	else:
+		n_gpus = torch.cuda.device_count()
+		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.val_list,
+																voc12_root=args.voc12_root, scales=args.cam_scales)
+		dataset = torchutils.split_dataset(dataset, n_gpus)
+
+		multiprocessing.spawn(_seg_validate_infer_worker, nprocs=n_gpus, args=(model, dataset, args), join=True)
+
+		torch.cuda.empty_cache()
+
+		print('Validate: 2. Eval preds...')
+		# step 2: eval results
+		miou = eval_metrics('val', args.valid_model_out_dir, args)
+		return miou
 
 '''
 Clsbd train
@@ -259,9 +371,11 @@ def compute_clsbd_loss(pred):
 	loss = (pos[:,-1:]/pos_bg_sum.sum()).sum()/4.+(pos[:,:-1]/pos_fg_sum.sum()).sum()/4.+(neg/neg_sum.sum()).sum()/2.
 	return loss
 
-def clsbd_alternate_train(train_data_loader, model, clsbd, optimizer, avg_meter, timer, args):
-	model.eval()
-	clsbd.train()
+def clsbd_alternate_train(train_data_loader, model, clsbd, optimizer, avg_meter, timer, args, ep):
+	model = torch.nn.DataParallel(model).cuda().eval()
+	model.module.eval()
+	clsbd = torch.nn.DataParallel(clsbd).cuda().train()
+	clsbd.module.train()
 	cb = [None, None, None, None]
 	img_denorm = torchutils.ImageDenorm()
 	for step, pack in enumerate(train_data_loader):
@@ -271,8 +385,9 @@ def clsbd_alternate_train(train_data_loader, model, clsbd, optimizer, avg_meter,
 		label = pack['label'].cuda(non_blocking=True)  # [16, 21]
 		mask = pack['mask'].cuda(non_blocking=True)  # [16, 21]
 		# mask down sample
-		seg_output = model(img_pack,MSF=True) # [16, 21, 32, 32]
-		seg_label, mask = make_seg2clsbd_label(img, seg_output, label, args, img_denorm, mask=mask) # format: one channel image, each pixel denoted by class num.
+		with torch.no_grad():
+			seg_output = model(img_pack, MSF=True) # [16, 21, 32, 32]
+			seg_label, mask = make_seg2clsbd_label(img, seg_output, label, args, img_denorm, mask=mask) # format: one channel image, each pixel denoted by class num.
 		
 		loss_pack, hms = clsbd(img, seg_label, mask=mask)
 		if (optimizer.global_step-1)%20 == 0 and args.cam_visualize_train:
@@ -298,7 +413,8 @@ def clsbd_alternate_train(train_data_loader, model, clsbd, optimizer, avg_meter,
 					'etc:%s' % (timer.str_estimated_complete()), flush=True)
 	else:
 		timer.reset_stage()
-		torch.save(clsbd.module.state_dict(), args.irn_weights_name + '.pth')
+		torch.save(clsbd.module.state_dict(), args.irn_weights_name + '_' + str(ep) + '.pth')
+	return clsbd.module, optimizer.is_max_step()
 
 def _clsbd_validate_infer_worker(process_id, model, clsbd, dataset, args):
 
@@ -361,30 +477,5 @@ def clsbd_validate(model, clsbd, args):
 
 		print('Validate: 2. Eval labels...')
 		# step 2: eval results
-		dataset = VOCSemanticSegmentationDataset(split=args.chainer_eval_set, data_dir=args.voc12_root)
-		labels = [dataset.get_example_by_keys(i, (1,))[0] for i in range(len(dataset))]
-		preds = []
-		qdar = tqdm.tqdm(dataset.ids,total=len(dataset.ids),ascii=True)
-		for id in qdar:
-			cls_labels = imageio.imread(os.path.join(args.valid_clsbd_out_dir, id + '.png')).astype(np.uint8) + 1
-			cls_labels[cls_labels == 21] = 0
-			preds.append(cls_labels.copy())
-
-		confusion = calc_semantic_segmentation_confusion(preds, labels)[:21, :21] #[labels[ind] for ind in ind_list]
-
-		gtj = confusion.sum(axis=1)
-		resj = confusion.sum(axis=0)
-		gtjresj = np.diag(confusion)
-		denominator = gtj + resj - gtjresj
-		fp = 1. - gtj / denominator
-		fn = 1. - resj / denominator
-		iou = gtjresj / denominator
-
-		print("fp and fn:")
-		print("fp: "+str(np.round(fp,3)))
-		print("fn: "+str(np.round(fn,3)))
-		# print(fp[0], fn[0])
-		print(np.mean(fp[1:]), np.mean(fn[1:]))
-
-		print({'iou': iou, 'miou': np.nanmean(iou)})
-		exit(0)
+		miou = eval_metrics(args.chainer_eval_set, args.valid_clsbd_out_dir, args)
+		return miou
