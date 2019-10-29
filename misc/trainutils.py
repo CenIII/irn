@@ -215,6 +215,9 @@ def compute_seg_loss(crit, seg_out, seg_label):
 	return loss
 
 def model_alternate_train(train_data_loader, model, model_inf, clsbd, optimizer, avg_meter, timer, args, ep):
+	# temp modification: make seg label for 10000+ images
+
+
 	model = torch.nn.DataParallel(model).cuda().train()
 	model.module.train()
 	clsbd = torch.nn.DataParallel(clsbd).cuda().eval()
@@ -231,19 +234,20 @@ def model_alternate_train(train_data_loader, model, model_inf, clsbd, optimizer,
 		img_pack = [pack['msf_img'][i].cuda() for i in range(len(pack['msf_img']))]
 		label = pack['label'].cuda(non_blocking=True)  # [16, 21]
 		mask = pack['mask'].cuda(non_blocking=True)  # [16, 21]
-
+		seg_label = pack['seg_label'].cuda(non_blocking=True)  # [16, 21]
+		# import pdb;pdb.set_trace()
 		# 2. label making
-		with torch.no_grad():
-			seg_output_aslabel = model_inf(img_pack, MSF=True)
-			seg_unary, mask = make_seg_unary(seg_output_aslabel, label, args, mask=mask) # format: one channel image, each pixel denoted by class num.
-			crf_output, hms = clsbd(img_pack, seg_unary, num_iter=50, mask=mask, MSF=True)
-			seg_label = make_seg_label(crf_output)
+		# with torch.no_grad():
+		# 	seg_output_aslabel = model_inf(img_pack, MSF=True)
+		# 	seg_unary, mask = make_seg_unary(seg_output_aslabel, label, args, mask=mask) # format: one channel image, each pixel denoted by class num.
+		# 	crf_output, hms = clsbd(img_pack, seg_unary, num_iter=50, mask=mask, MSF=True)
+		# 	seg_label = make_seg_label(crf_output)
 		# 1. forward pass model
 		seg_output = model(img)
-		if (optimizer.global_step-1)%20 == 0 and args.cam_visualize_train:
-			visualize(img, clsbd.module, hms, label, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir_model)
-			visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir_model, origin=0, descr='unary')
-			visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir_model, origin=-1, descr='label')
+		# if (optimizer.global_step-1)%20 == 0 and args.cam_visualize_train:
+		# 	visualize(img, clsbd.module, hms, label, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir_model)
+		# 	visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir_model, origin=0, descr='unary')
+		# 	visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir_model, origin=-1, descr='label')
 		# 3. loss computing
 		# import pdb;pdb.set_trace()
 		loss = compute_seg_loss(crit, seg_output, seg_label)
@@ -445,7 +449,7 @@ def _clsbd_validate_infer_worker(process_id, model, clsbd, dataset, args):
 			# ambiguous region classified to bg
 			rw_up[-1] += 1e-5
 			rw_pred = torch.argmax(rw_up, dim=0).cpu().numpy()
-			imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '.png'), rw_pred.astype(np.uint8))
+			imageio.imsave(os.path.join(args.sem_seg_out_dir, img_name + '.png'), rw_pred.astype(np.uint8))
 			# imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_light.png'), (rw_pred*15).astype(np.uint8))
 			# imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_clsbd.png'), (255*hms[-1][0,...,0].cpu().numpy()).astype(np.uint8))
 
@@ -467,7 +471,7 @@ def clsbd_validate(model, clsbd, args):
 		exit(0)
 	else:
 		n_gpus = torch.cuda.device_count()
-		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.infer_list,
+		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.train_list,
 																voc12_root=args.voc12_root, scales=args.cam_scales)
 		dataset = torchutils.split_dataset(dataset, n_gpus)
 
@@ -477,5 +481,5 @@ def clsbd_validate(model, clsbd, args):
 
 		print('Validate: 2. Eval labels...')
 		# step 2: eval results
-		miou = eval_metrics(args.chainer_eval_set, args.valid_clsbd_out_dir, args)
-		return miou
+		# miou = eval_metrics(args.chainer_eval_set, args.valid_clsbd_out_dir, args)
+		return None#miou

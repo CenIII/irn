@@ -124,10 +124,11 @@ def random_crop(images, cropsize, default_values):
         mask[box[0]:box[1], box[2]:box[3]] = 1.
         new_images.append(cont)
         new_masks.append(mask)
-    if len(new_images) == 1:
-        new_images = new_images[0]
-        new_masks = new_masks[0]
-    return new_images, new_masks
+    # if len(new_images) == 1:
+    #     new_images = new_images[0]
+    new_masks = new_masks[0]
+    new_images.append(new_masks)
+    return new_images
 
 def top_left_crop(img, cropsize, default_value):
 

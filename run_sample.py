@@ -17,9 +17,9 @@ def join_path(args):
     args.valid_clsbd_out_dir = os.path.join(args.exp_root, args.valid_clsbd_out_dir)
     args.valid_model_out_dir = os.path.join(args.exp_root, args.valid_model_out_dir)
 
-    # args.ir_label_out_dir = os.path.join(args.exp_root, args.ir_label_out_dir)
+    args.ir_label_out_dir = os.path.join(args.exp_root, args.ir_label_out_dir)
     # args.unary_out_dir = os.path.join(args.exp_root, args.unary_out_dir)
-    # args.sem_seg_out_dir = os.path.join(args.exp_root, args.sem_seg_out_dir)
+    args.sem_seg_out_dir = os.path.join(args.exp_root, args.sem_seg_out_dir)
     # args.ins_seg_out_dir = os.path.join(args.exp_root, args.ins_seg_out_dir)
 
     os.makedirs('./exp', exist_ok=True)
@@ -34,9 +34,9 @@ def join_path(args):
     os.makedirs(args.valid_out_dir, exist_ok=True)
     os.makedirs(args.valid_clsbd_out_dir, exist_ok=True)
     os.makedirs(args.valid_model_out_dir, exist_ok=True)
-    # os.makedirs(args.ir_label_out_dir, exist_ok=True)
+    os.makedirs(args.ir_label_out_dir, exist_ok=True)
     # os.makedirs(args.unary_out_dir, exist_ok=True)
-    # os.makedirs(args.sem_seg_out_dir, exist_ok=True)
+    os.makedirs(args.sem_seg_out_dir, exist_ok=True)
     # os.makedirs(args.ins_seg_out_dir, exist_ok=True)
     return args
 
@@ -108,8 +108,8 @@ if __name__ == '__main__':
     
 
     parser.add_argument("--unary_out_dir", default="result/unary", type=str)
-    parser.add_argument("--ir_label_out_dir", default="result/ir_label20", type=str)
-    parser.add_argument("--sem_seg_out_dir", default="result/sem_seg_clsbd", type=str)
+    parser.add_argument("--ir_label_out_dir", default="result/ir_label", type=str)
+    parser.add_argument("--sem_seg_out_dir", default="result/sem_seg", type=str)
     parser.add_argument("--ins_seg_out_dir", default="result/ins_seg", type=str)
 
 

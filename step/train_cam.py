@@ -61,7 +61,7 @@ def run(args):
 	# 	np.random.seed(int(seed))
 
 	# model train loader
-	train_dataset = voc12.dataloader.VOC12ClassificationDatasetMSF_Train(args.train_list, voc12_root=args.voc12_root, #resize_long=(320, 640),
+	train_dataset = voc12.dataloader.VOC12ClassificationDatasetMSF_Train(args.train_list, voc12_root=args.voc12_root, label_dir=args.sem_seg_out_dir, #resize_long=(320, 640),
 																hor_flip=True,
 																crop_size=512, crop_method="random",rescale=(1., 1.5), scales=args.cam_scales)
 	train_data_loader = DataLoader(train_dataset, batch_size=args.cam_batch_size,
@@ -121,7 +121,7 @@ def run(args):
 				best_miou = miou
 				model = model_new
 		elif rt_key == 'clsbd':
-			clsbd, _ = clsbd_alternate_train(train_data_loader, model, clsbd, clsbd_optimizer, avg_meter, timer, args, ep)
-			clsbd_validate(model, clsbd, args)
+			# clsbd, _ = clsbd_alternate_train(train_data_loader, model, clsbd, clsbd_optimizer, avg_meter, timer, args, ep)
+			clsbd_validate(model_init, clsbd, args)
 
 	torch.cuda.empty_cache()

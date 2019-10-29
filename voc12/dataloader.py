@@ -178,7 +178,7 @@ class VOC12ClassificationDataset(VOC12ImageDataset):
 
 class VOC12ClassificationDatasetMSF_Train(VOC12ImageDataset):
 
-    def __init__(self, img_name_list_path, voc12_root,
+    def __init__(self, img_name_list_path, voc12_root, label_dir,
                  resize_long=None, rescale=None, img_normal=TorchvisionNormalize(), hor_flip=False,
                  crop_size=None, crop_method=None, scales=(1.0,)):
         super().__init__(img_name_list_path, voc12_root,
@@ -188,6 +188,7 @@ class VOC12ClassificationDatasetMSF_Train(VOC12ImageDataset):
         bg_labels = np.ones((self.label_list.shape[0],1)).astype(np.float)
         self.label_list = np.concatenate((self.label_list,bg_labels), axis=1).astype(np.float)
         self.scales = scales
+        self.label_dir = label_dir
 
     def __getitem__(self, idx):
         name = self.img_name_list[idx]
@@ -195,20 +196,24 @@ class VOC12ClassificationDatasetMSF_Train(VOC12ImageDataset):
 
         img = np.asarray(imageio.imread(get_img_path(name_str, self.voc12_root)))
 
+        seg_label = imageio.imread(os.path.join(self.label_dir, name_str + '.png'))
+        
+
         if self.resize_long:
-            img = imutils.random_resize_long(img, self.resize_long[0], self.resize_long[1])
-
+            img, seg_label = imutils.random_resize_long((img, seg_label), self.resize_long[0], self.resize_long[1])
+            
         if self.rescale:
-            img = imutils.random_scale(img, scale_range=self.rescale, order=3)
-
+            img, seg_label = imutils.random_scale((img, seg_label), scale_range=self.rescale, order=(3,0))
+            # print(max(seg_label))
         if self.hor_flip:
-            img = imutils.random_lr_flip(img)
+            img, seg_label = imutils.random_lr_flip((img, seg_label))
 
         if self.crop_size:
             if self.crop_method == "random":
-                img, mask = imutils.random_crop(img, self.crop_size, 0)
+                img, seg_label, mask = imutils.random_crop((img, seg_label), self.crop_size, (0,20))
+                # print(max(seg_label))
             else:
-                img, mask = imutils.top_left_crop(img, self.crop_size, 0)
+                img, seg_label, mask = imutils.top_left_crop((img, seg_label), self.crop_size, (0,0))
 
         ms_img_list = []
         for s in self.scales:
@@ -229,8 +234,8 @@ class VOC12ClassificationDatasetMSF_Train(VOC12ImageDataset):
         mask = torch.from_numpy(mask[0:1].astype(np.float)).type(torch.FloatTensor)
 
         label = torch.from_numpy(self.label_list[idx]).type(torch.FloatTensor)
-
-        return {'name': name, 'img': img, 'mask': mask, 'label': label, 'msf_img': ms_img_list}
+        seg_label = imutils.pil_rescale(seg_label, 1./16., 0)
+        return {'name': name, 'img': img, 'mask': mask, 'label': label, 'msf_img': ms_img_list, "seg_label": torch.from_numpy(np.asarray(seg_label)).type(torch.LongTensor)}
 
 class VOC12ClassificationDatasetMSF(VOC12ClassificationDataset):
 
