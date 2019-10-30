@@ -41,7 +41,7 @@ default_conf = {
 }
 
 infer_conf = {
-    'filter_size': 9,
+    'filter_size': 7,
     'blur': 2,
     'merge': False,
     'norm': 'none',
@@ -124,7 +124,6 @@ class Net(nn.Module):
 
         self.backbone = nn.ModuleList([self.stage1, self.stage2, self.stage3, self.stage4, self.stage5])
         self.edge_layers = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge3, self.fc_edge4, self.fc_edge5, self.fc_edge6])
-        self.sobel = Sobel()
 
     def infer_clsbd(self, x): # no sigmoid
         x1 = self.stage1(x).detach()

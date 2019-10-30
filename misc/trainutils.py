@@ -277,7 +277,7 @@ def _seg_validate_infer_worker(process_id, model, dataset, args):
 	n_gpus = torch.cuda.device_count()
 	data_loader = DataLoader(databin, batch_size=1, shuffle=False, num_workers=args.num_workers // n_gpus, pin_memory=False)
 
-	with torch.no_grad(), cuda.device(process_id):
+	with torch.no_grad(), cuda.device(process_id+1):
 		model.cuda()
 		qdar = tqdm.tqdm(enumerate(data_loader),total=len(data_loader),ascii=True,position=process_id)
 		for iter, pack in qdar:
@@ -312,7 +312,7 @@ def model_validate(model, args):
 		torch.cuda.empty_cache()
 		exit(0)
 	else:
-		n_gpus = torch.cuda.device_count()
+		n_gpus = 3#torch.cuda.device_count()
 		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.val_list,
 																voc12_root=args.voc12_root, scales=args.cam_scales)
 		dataset = torchutils.split_dataset(dataset, n_gpus)
@@ -449,8 +449,8 @@ def _clsbd_validate_infer_worker(process_id, model, clsbd, dataset, args):
 			# ambiguous region classified to bg
 			rw_up[-1] += 1e-5
 			rw_pred = torch.argmax(rw_up, dim=0).cpu().numpy()
-			imageio.imsave(os.path.join(args.sem_seg_out_dir, img_name + '.png'), rw_pred.astype(np.uint8))
-			# imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_light.png'), (rw_pred*15).astype(np.uint8))
+			imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '.png'), rw_pred.astype(np.uint8))
+			imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_light.png'), (rw_pred*15).astype(np.uint8))
 			# imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_clsbd.png'), (255*hms[-1][0,...,0].cpu().numpy()).astype(np.uint8))
 
 def clsbd_validate(model, clsbd, args):
@@ -471,7 +471,7 @@ def clsbd_validate(model, clsbd, args):
 		exit(0)
 	else:
 		n_gpus = torch.cuda.device_count()
-		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.train_list,
+		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.infer_list,
 																voc12_root=args.voc12_root, scales=args.cam_scales)
 		dataset = torchutils.split_dataset(dataset, n_gpus)
 
@@ -481,5 +481,6 @@ def clsbd_validate(model, clsbd, args):
 
 		print('Validate: 2. Eval labels...')
 		# step 2: eval results
-		# miou = eval_metrics(args.chainer_eval_set, args.valid_clsbd_out_dir, args)
+		miou = eval_metrics('train', args.valid_clsbd_out_dir, args)
+		exit(0)
 		return None#miou

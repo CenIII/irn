@@ -46,7 +46,7 @@ def run(args):
 
 	clsbd = getattr(importlib.import_module(args.irn_network), 'Net')()
 	if args.clsbd_preload:
-		clsbd.load_state_dict(torch.load(args.irn_weights_name + '.pth'), strict=True)
+		clsbd.load_state_dict(torch.load('exp/original_cam/sess/res50_irn_orig.pth'), strict=False)
 
 	# seed = 25
 	# torch.manual_seed(seed)
