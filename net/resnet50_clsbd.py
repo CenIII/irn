@@ -41,7 +41,7 @@ default_conf = {
 }
 
 infer_conf = {
-    'filter_size': 7,
+    'filter_size': 9,
     'blur': 2,
     'merge': False,
     'norm': 'none',
@@ -172,7 +172,7 @@ class Net(nn.Module):
         hms = self.save_hm(*hms)
         return pred, hms
 
-    def forwardMSF(self,img_pack, unary, num_iter=50, mask=None):
+    def forwardMSF(self,img_pack, unary, num_iter=100, mask=None):
         def flip_add(inp):
             return (inp[:,0]+inp[:,1].flip(-1))/2
         def fiveD_forward(inp):

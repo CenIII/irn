@@ -450,7 +450,7 @@ def _clsbd_validate_infer_worker(process_id, model, clsbd, dataset, args):
 			rw_up[-1] += 1e-5
 			rw_pred = torch.argmax(rw_up, dim=0).cpu().numpy()
 			imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '.png'), rw_pred.astype(np.uint8))
-			imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_light.png'), (rw_pred*15).astype(np.uint8))
+			# imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_light.png'), (rw_pred*15).astype(np.uint8))
 			# imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_clsbd.png'), (255*hms[-1][0,...,0].cpu().numpy()).astype(np.uint8))
 
 def clsbd_validate(model, clsbd, args):
