@@ -681,9 +681,10 @@ class ConvCRF(nn.Module):
 
 		norm = False
 		for i in range(num_iter):
-			prediction[:,-1] *= 0.8
-			# import pdb;pdb.set_trace()
-			prediction[:,:-1] = (prediction[:,:-1]+1e-5)*(1 - prediction[:,-1:])/(prediction[:,:-1]+1e-5).sum(dim=1, keepdim=True)
+			if not self.training:
+				prediction[:,0] *= 0.8
+				# import pdb;pdb.set_trace()
+				prediction[:,1:] = (prediction[:,1:]+1e-5)*(1 - prediction[:,0:1])/(prediction[:,1:]+1e-5).sum(dim=1, keepdim=True)
 			# prediction /= prediction.sum(dim=1, keepdim=True)
 			# △ 1 Message passing
 			messages, input_col, pl = self.kernel.compute(prediction)
@@ -707,8 +708,8 @@ class ConvCRF(nn.Module):
 				pl_pred = (prediction*pl)
 
 				pos_norm = pl_pred*input_col.view(N,C,-1,W,H).sum(dim=2)
-				pos_fg_sum = torch.clamp(pos_norm[:,:-1].sum().detach(),1.)
-				pos_bg_sum = torch.clamp(pos_norm[:,-1:].sum().detach(),1.)
+				pos_fg_sum = torch.clamp(pos_norm[:,1:].sum().detach(),1.)
+				pos_bg_sum = torch.clamp(pos_norm[:,0:1].sum().detach(),1.)
 				neg_input_col = self.neg_comp(input_col.view(N,C,-1,1)).view(input_col.shape).view(N,C,-1,W,H).sum(dim=2)
 				neg_sum = torch.clamp((pl_pred*neg_input_col).sum().detach(),1.)
 

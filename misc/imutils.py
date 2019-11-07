@@ -35,6 +35,16 @@ def random_resize_long(img, min_long, max_long):
 
     return pil_rescale(img, scale, 3)
 
+def target_scale(img, target_scale, order):
+
+    # target_scale = scale_range[0] + random.random() * (scale_range[1] - scale_range[0])
+
+    if isinstance(img, tuple):
+        return (pil_rescale(img[0], target_scale, order[0]), pil_rescale(img[1], target_scale, order[1]))
+    else:
+        return pil_rescale(img, target_scale, order)
+
+
 def random_scale(img, scale_range, order):
 
     target_scale = scale_range[0] + random.random() * (scale_range[1] - scale_range[0])
