@@ -109,7 +109,7 @@ def run(args):
 	if args.cam_preload:
 		model_init.load_state_dict(torch.load(args.cam_weights_name + '.pth'), strict=True)
 
-	model = getattr(importlib.import_module(args.seg_network), 'DeepLabV2_ResNet101_MSC')(21)
+	model = getattr(importlib.import_module(args.seg_network), 'DeepLabV2_ResNet50_MSC')(21)
 
 	clsbd = getattr(importlib.import_module(args.irn_network), 'Net')()
 	if args.clsbd_preload:
@@ -149,20 +149,23 @@ def run(args):
 		if rt_key == 'model':
 			model = getattr(importlib.import_module(args.seg_network), 'DeepLabV2_ResNet50_MSC')(21)
 			model = reload_res50(model)
-			model_optimizer = get_model_optimizer(model, args, 10*max_step)
+			# model.load_state_dict(torch.load('exp/deeplabv2_cam21_meansig/sess/res50_cam_6.pth'), strict=False)
+			model_optimizer = get_model_optimizer(model, args, 5*max_step)
 			best_miou = 0
 			miou = -1
 			is_max_step = False
 			while True:
 				model_new, is_max_step = model_alternate_train(model_train_data_loader, model, model_optimizer, avg_meter, timer, args, ep)
-				import pdb;pdb.set_trace()
-				if miou < best_miou or is_max_step:
-					miou = model_validate(model, args, ep, make_label=True)
-					break
+				# import pdb;pdb.set_trace()
 				miou = model_validate(model, args, ep)
+				if miou < best_miou or is_max_step:
+					model_validate(model, args, ep, make_label=True)
+					exit(0)
+					break
 				best_miou = miou
 				model = model_new
 		elif rt_key == 'clsbd':
+			import pdb;pdb.set_trace()
 			clsbd = getattr(importlib.import_module(args.irn_network), 'Net')()
 			clsbd_optimizer = get_clsbd_optimizer(clsbd, args, 3*max_step)
 			is_max_step = False

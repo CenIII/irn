@@ -50,8 +50,8 @@ def eval_metrics(split_name, label_dir, args):
 	preds = []
 	qdar = tqdm.tqdm(dataset.ids,total=len(dataset.ids),ascii=True)
 	for id in qdar:
-		cls_labels = imageio.imread(os.path.join(label_dir, id + '.png')).astype(np.uint8) + 1
-		cls_labels[cls_labels == 21] = 0
+		cls_labels = imageio.imread(os.path.join(label_dir, id + '.png')).astype(np.uint8)
+		# cls_labels[cls_labels == 21] = 0
 		preds.append(cls_labels.copy())
 
 	confusion = calc_semantic_segmentation_confusion(preds, labels)[:21, :21] #[labels[ind] for ind in ind_list]
@@ -236,7 +236,7 @@ def model_alternate_train(train_data_loader, model, scheduler, avg_meter, timer,
 		scheduler.optimizer.step()
 		scheduler.step()
 
-		if (scheduler.last_epoch-1)%20 == 0:
+		if (scheduler.last_epoch-1)%100 == 0:
 			timer.update_progress(scheduler.last_epoch / scheduler.iter_max)
 
 			print('step:%5d/%5d' % (scheduler.last_epoch - 1, scheduler.iter_max),
@@ -247,7 +247,7 @@ def model_alternate_train(train_data_loader, model, scheduler, avg_meter, timer,
 	else:
 		timer.reset_stage()
 		torch.save(model.module.state_dict(), args.cam_weights_name + '_' + str(ep) + '.pth')
-	return model.module, optimizer.is_max_step()
+	return model.module, scheduler.is_max_step()
 
 # TODO: modify so _seg_label_infer_worker can use
 def make_seg2clsbd_label(img,seg_output,label,args,img_denorm):
@@ -321,7 +321,7 @@ def _seg_validate_infer_worker(process_id, model, dataset, args):
 	n_gpus = torch.cuda.device_count()
 	data_loader = DataLoader(databin, batch_size=1, shuffle=False, num_workers=args.num_workers // n_gpus, pin_memory=False)
 
-	with torch.no_grad(), cuda.device(process_id+1):
+	with torch.no_grad(), cuda.device(process_id):
 		model.cuda()
 		qdar = tqdm.tqdm(enumerate(data_loader),total=len(data_loader),ascii=True,position=process_id)
 		for iter, pack in qdar:
@@ -330,10 +330,9 @@ def _seg_validate_infer_worker(process_id, model, dataset, args):
 			label = pack['label'].cuda(non_blocking=True)
 			for k in range(len(pack['img'])):
 				pack['img'][k] = pack['img'][k].cuda(non_blocking=True)
+			seg_output = model.base.forwardMSF(pack['img']) #(orig_img)#
 			
-			seg_output = model.forwardMSF(pack['img']) #(orig_img)#
-			
-			rw_up = F.interpolate(seg_output, scale_factor=16, mode='bilinear', align_corners=False)[0, :, :orig_img_size[0], :orig_img_size[1]]
+			rw_up = F.interpolate(seg_output, scale_factor=8, mode='bilinear', align_corners=False)[0, :, :orig_img_size[0], :orig_img_size[1]]
 			rw_pred = torch.argmax(rw_up, dim=0).cpu().numpy()
 			imageio.imsave(os.path.join(args.valid_model_out_dir, img_name + '.png'), rw_pred.astype(np.uint8))
 			imageio.imsave(os.path.join(args.valid_model_out_dir, img_name + '_light.png'), (rw_pred*15).astype(np.uint8))
@@ -367,20 +366,23 @@ def model_validate(model, args, ep, make_label=False):
 			multiprocessing.spawn(_seg_label_infer_worker, nprocs=n_gpus, args=(model, dataset, args, label_out_dir), join=True)
 			# _seg_label_infer_worker(0, model, dataset, args)
 
-		torch.cuda.empty_cache()
-		print('Validate: 2. Making seg preds for val set...')
-		n_gpus = torch.cuda.device_count()
-		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.val_list,
-																voc12_root=args.voc12_root, scales=args.cam_scales)
-		dataset = torchutils.split_dataset(dataset, n_gpus)
+			torch.cuda.empty_cache()
+			return
+		else:
+			print('Validate: 2. Making seg preds for val set...')
+			n_gpus = torch.cuda.device_count()
+			dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.val_list,
+																	voc12_root=args.voc12_root, scales=args.cam_scales)
+			dataset = torchutils.split_dataset(dataset, n_gpus)
 
-		multiprocessing.spawn(_seg_validate_infer_worker, nprocs=n_gpus, args=(model, dataset, args), join=True)
-
-		torch.cuda.empty_cache()
-		print('Validate: 3. Eval preds...')
-		# step 2: eval results
-		miou = eval_metrics('val', args.valid_model_out_dir, args)
-		return miou
+			multiprocessing.spawn(_seg_validate_infer_worker, nprocs=n_gpus, args=(model, dataset, args), join=True)
+			# _seg_validate_infer_worker(0,model, dataset, args)
+			torch.cuda.empty_cache()
+			print('Validate: 3. Eval preds...')
+			# step 2: eval results
+			miou = eval_metrics('val', args.valid_model_out_dir, args)
+			torch.cuda.empty_cache()
+			return miou
 
 '''
 Clsbd train
