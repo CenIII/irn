@@ -476,7 +476,7 @@ def clsbd_validate(model, clsbd, args):
 		exit(0)
 	else:
 		n_gpus = torch.cuda.device_count()
-		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.infer_list,
+		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.train_list,
 																voc12_root=args.voc12_root, scales=args.cam_scales)
 		dataset = torchutils.split_dataset(dataset, n_gpus)
 
