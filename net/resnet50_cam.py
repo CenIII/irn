@@ -38,7 +38,7 @@ class Net(nn.Module):
         self.stage3 = nn.Sequential(self.resnet50.layer3)
         self.stage4 = nn.Sequential(self.resnet50.layer4)
 
-        self.classifier = _ASPP(2048, 21, [6, 12, 18, 24]) #nn.Conv2d(2048, 20, 1, bias=False)
+        self.classifier = nn.Conv2d(2048, 20, 1, bias=False)#_ASPP(2048, 21, [6, 12, 18, 24]) #
 
         # self.backbone_half = nn.ModuleList([self.stage3, self.stage4])
         self.backbone = nn.ModuleList([self.stage1, self.stage2, self.stage3, self.stage4])

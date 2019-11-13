@@ -50,8 +50,8 @@ def eval_metrics(split_name, label_dir, args):
 	preds = []
 	qdar = tqdm.tqdm(dataset.ids,total=len(dataset.ids),ascii=True)
 	for id in qdar:
-		cls_labels = imageio.imread(os.path.join(label_dir, id + '.png')).astype(np.uint8) + 1
-		cls_labels[cls_labels == 21] = 0
+		cls_labels = imageio.imread(os.path.join(label_dir, id + '.png')).astype(np.uint8)
+		# cls_labels[cls_labels == 21] = 0
 		preds.append(cls_labels.copy())
 
 	confusion = calc_semantic_segmentation_confusion(preds, labels)[:21, :21] #[labels[ind] for ind in ind_list]
@@ -175,8 +175,8 @@ def make_seg_unary(seg_output,label,args, mask=None, orig_size=None):
 		mask = F.interpolate(mask, strided_size, mode='bilinear', align_corners=False) #[16, 21, 128, 128]
 
 	norm_seg = seg_output / F.adaptive_max_pool2d(seg_output, (1, 1)) + 1e-5
-	norm_seg = norm_seg * label[:,:,None,None]
-	fg = norm_seg[:,:-1]
+	norm_seg = norm_seg * label[:,:-1,None,None]
+	fg = norm_seg#[:,:-1]
 	# crf fg_conf
 	# crf bg_conf
 	fg_conf = F.pad(fg, (0, 0, 0, 0, 0, 1, 0, 0), mode='constant',value=args.unary_fg_thres)
@@ -447,8 +447,13 @@ def _clsbd_validate_infer_worker(process_id, model, clsbd, dataset, args):
 			rw_up = F.interpolate(rw, scale_factor=4, mode='bilinear', align_corners=False)[0, :, :orig_img_size[0], :orig_img_size[1]]
 			rw_up[rw_up<0.8] = 0
 			# ambiguous region classified to bg
-			rw_up[-1] += 1e-5
-			rw_pred = torch.argmax(rw_up, dim=0).cpu().numpy()
+			# rw_up[-1] += 1e-5
+			rw_pred = torch.argmax(rw_up, dim=0)
+			mask = rw_up.sum(dim=0)
+			rw_pred[mask==0] = 254
+			rw_pred += 1
+			rw_pred[rw_pred==21] = 0
+			rw_pred = rw_pred.cpu().numpy()
 			imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '.png'), rw_pred.astype(np.uint8))
 			# imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_light.png'), (rw_pred*15).astype(np.uint8))
 			# imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_clsbd.png'), (255*hms[-1][0,...,0].cpu().numpy()).astype(np.uint8))

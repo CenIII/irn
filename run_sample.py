@@ -95,7 +95,7 @@ if __name__ == '__main__':
     # Output Path
     parser.add_argument("--exp_root", default="exp0", type=str)
     parser.add_argument("--log_name", default="sample_train_eval", type=str)
-    parser.add_argument("--cam_weights_name", default="sess/res50_cam.pth", type=str)
+    parser.add_argument("--cam_weights_name", default="sess/res50_cam", type=str)
     parser.add_argument("--irn_weights_name", default="sess/res50_irn_clsbd.pth", type=str)
     parser.add_argument("--cam_out_dir", default="result/cam", type=str)
     parser.add_argument("--vis_out_dir", default="result/vis", type=str)
