@@ -22,6 +22,8 @@ def join_path(args):
     args.sem_seg_out_dir = os.path.join(args.exp_root, args.sem_seg_out_dir)
     # args.ins_seg_out_dir = os.path.join(args.exp_root, args.ins_seg_out_dir)
 
+    args.log_file_path = os.path.join(args.exp_root, 'log.txt')
+    
     os.makedirs('./exp', exist_ok=True)
     os.makedirs(args.exp_root, exist_ok=True)
     os.makedirs(os.path.join(args.exp_root,"sess"), exist_ok=True)

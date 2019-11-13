@@ -20,6 +20,7 @@ import copy
 from torch import autograd
 from torch.nn.utils import clip_grad_norm_
 import random 
+import time 
 
 from chainercv.datasets import VOCSemanticSegmentationDataset
 
@@ -140,6 +141,8 @@ def run(args):
 
 	avg_meter = pyutils.AverageMeter()
 	timer = pyutils.Timer()
+	logger = open(args.log_file_path,'a')
+	logger.write('!!! '+'Exp time: '+time.ctime()+'\n')
 
 	for ep in range(ep_start, args.cam_num_epoches):
 		
@@ -148,30 +151,37 @@ def run(args):
 		rt_key = determine_routine(ep,args)
 		if rt_key == 'model':
 			model = getattr(importlib.import_module(args.seg_network), 'DeepLabV2_ResNet50_MSC')(21)
-			model = reload_res50(model)
-			# model.load_state_dict(torch.load('exp/deeplabv2_cam21_meansig/sess/res50_cam_6.pth'), strict=False)
+			# model = reload_res50(model)
+			model.load_state_dict(torch.load('exp/deeplabv2_cam21_meansig/sess/res50_cam_6.pth'), strict=False)
 			model_optimizer = get_model_optimizer(model, args, 5*max_step)
 			best_miou = 0
 			miou = -1
 			is_max_step = False
+			model_optimizer.last_epoch = 2620
 			while True:
-				model_new, is_max_step = model_alternate_train(model_train_data_loader, model, model_optimizer, avg_meter, timer, args, ep)
+				# model_new, is_max_step = model_alternate_train(model_train_data_loader, model, model_optimizer, avg_meter, timer, args, ep, logger)
 				# import pdb;pdb.set_trace()
-				miou = model_validate(model, args, ep)
-				if miou < best_miou or is_max_step:
-					model_validate(model, args, ep, make_label=True)
+				miou = model_validate(model, args, ep, logger)
+				# exit(0)
+				if is_max_step: #miou < best_miou or 
+					# model_validate(model_new, args, ep, make_label=True)
 					exit(0)
 					break
 				best_miou = miou
 				model = model_new
 		elif rt_key == 'clsbd':
-			import pdb;pdb.set_trace()
+			# import pdb;pdb.set_trace()
+			model = getattr(importlib.import_module(args.seg_network), 'DeepLabV2_ResNet50_MSC')(21)
+			# model = reload_res50(model)
+			model.load_state_dict(torch.load('exp/deeplabv2_cam21_meansig/sess/res50_cam_6_crf.pth'), strict=False)
 			clsbd = getattr(importlib.import_module(args.irn_network), 'Net')()
+			clsbd.load_state_dict(torch.load('exp/deeplabv2_cam21_meansig/sess/res50_clsbd_5_crf.pth'), strict=False)
+
 			clsbd_optimizer = get_clsbd_optimizer(clsbd, args, 3*max_step)
 			is_max_step = False
-			while not is_max_step:
-				clsbd, is_max_step = clsbd_alternate_train(clsbd_train_data_loader, clsbd, clsbd_optimizer, avg_meter, timer, args, ep)
-			import pdb;pdb.set_trace()
+			# while not is_max_step:
+			# 	clsbd, is_max_step = clsbd_alternate_train(clsbd_train_data_loader, clsbd, clsbd_optimizer, avg_meter, timer, args, ep)
+			# import pdb;pdb.set_trace()
 			model_in = model_init if ep==5 else model
 			clsbd_validate(model_in, clsbd, args, ep)
 
