@@ -36,9 +36,9 @@ def join_path(args):
     os.makedirs(args.valid_out_dir, exist_ok=True)
     os.makedirs(args.valid_clsbd_out_dir, exist_ok=True)
     os.makedirs(args.valid_model_out_dir, exist_ok=True)
-    os.makedirs(args.ir_label_out_dir, exist_ok=True)
+    # os.makedirs(args.ir_label_out_dir, exist_ok=True)
     # os.makedirs(args.unary_out_dir, exist_ok=True)
-    os.makedirs(args.sem_seg_out_dir, exist_ok=True)
+    # os.makedirs(args.sem_seg_out_dir, exist_ok=True)
     # os.makedirs(args.ins_seg_out_dir, exist_ok=True)
     return args
 

@@ -151,17 +151,18 @@ def run(args):
 		rt_key = determine_routine(ep,args)
 		if rt_key == 'model':
 			model = getattr(importlib.import_module(args.seg_network), 'DeepLabV2_ResNet50_MSC')(21)
-			# model = reload_res50(model)
-			model.load_state_dict(torch.load('exp/deeplabv2_cam21_meansig/sess/res50_cam_6.pth'), strict=False)
-			model_optimizer = get_model_optimizer(model, args, 5*max_step)
+			model = reload_res50(model)
+			# model.load_state_dict(torch.load('exp/deeplabv2_cam21_meansig/sess/res50_cam_6.pth'), strict=False)
+			model_optimizer = get_model_optimizer(model, args, 10*max_step)
 			best_miou = 0
 			miou = -1
 			is_max_step = False
-			model_optimizer.last_epoch = 2620
+			# model_optimizer.last_epoch = 1068
+			# model_optimizer.step(epoch=2645)
 			while True:
-				# model_new, is_max_step = model_alternate_train(model_train_data_loader, model, model_optimizer, avg_meter, timer, args, ep, logger)
+				model_new, is_max_step = model_alternate_train(model_train_data_loader, model, model_optimizer, avg_meter, timer, args, ep, logger)
 				# import pdb;pdb.set_trace()
-				miou = model_validate(model, args, ep, logger)
+				miou = model_validate(model_new, args, ep, logger)
 				# exit(0)
 				if is_max_step: #miou < best_miou or 
 					# model_validate(model_new, args, ep, make_label=True)

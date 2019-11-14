@@ -210,13 +210,14 @@ def model_alternate_train(train_data_loader, model, scheduler, avg_meter, timer,
 	criterion = nn.CrossEntropyLoss(ignore_index=255)
 
 	# crit = nn.NLLLoss(ignore_index=21)
+
 	for step, pack in enumerate(train_data_loader):
 
 		scheduler.optimizer.zero_grad()
 
 		loss = 0
-		for _ in range(1):
-			img = pack['img'].cuda()  # ([16, 3, 512, 512])
+		for i in range(1):
+			img = pack['img'].cuda()  # ([16, 3, 512, 512])#[i*10:(i+1)*10]
 			label = pack['label'].cuda(non_blocking=True)  # [16, 21]
 			# mask = pack['mask'].cuda(non_blocking=True)  # [16, 21]
 			seg_label = pack['seg_label'].cuda(non_blocking=True)  # [16, 21]
@@ -343,10 +344,10 @@ def _seg_validate_infer_worker(process_id, model, dataset, args, use_crf=False):
 			seg_output = model.base.forwardMSF(pack['img']) #(orig_img)#
 			rw_up = F.interpolate(seg_output, scale_factor=8, mode='bilinear', align_corners=False)[0, :, :orig_img_size[0], :orig_img_size[1]]
 			rw_up = F.softmax(rw_up,dim=0)
-			rw_up[rw_up<0.2] = 0
+			# rw_up[rw_up<0.2] = 0
 			rw_pred = torch.argmax(rw_up, dim=0)
-			rw_mask = rw_up.sum(dim=0)
-			rw_pred[rw_mask==0] = 0
+			# rw_mask = rw_up.sum(dim=0)
+			# rw_pred[rw_mask==0] = 0
 			rw_pred = rw_pred.cpu().numpy()
 			# import pdb;pdb.set_trace()
 			if use_crf:
