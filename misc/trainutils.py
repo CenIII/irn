@@ -54,7 +54,7 @@ def eval_metrics(split_name, label_dir, args):
 		# cls_labels[cls_labels == 21] = 0
 		preds.append(cls_labels.copy())
 
-	confusion = calc_semantic_segmentation_confusion(preds, labels)[:21, :21] #[labels[ind] for ind in ind_list]
+	confusion = calc_semantic_segmentation_confusion(preds, labels)#[:21, :21] #[labels[ind] for ind in ind_list]
 
 	gtj = confusion.sum(axis=1)
 	resj = confusion.sum(axis=0)
@@ -62,7 +62,7 @@ def eval_metrics(split_name, label_dir, args):
 	denominator = gtj + resj - gtjresj
 	fp = 1. - gtj / denominator
 	fn = 1. - resj / denominator
-	iou = gtjresj / denominator
+	iou = (gtjresj / denominator)[:21]
 
 	print("fp and fn:")
 	print("fp: "+str(np.round(fp,3)))
@@ -443,19 +443,20 @@ def _clsbd_validate_infer_worker(process_id, model, clsbd, dataset, args):
 			seg_output = model.forwardMSF(pack['img']) #(orig_img)#
 			unary, _ = make_seg_unary(seg_output,label,args,orig_size=orig_img_size)
 			# pack['img'] for clsbd forward
-			rw, hms = clsbd.forwardMSF(pack['img'],unary) #(orig_img,unary,num_iter=50)#
+			rw, hms = clsbd.forwardMSF(pack['img'],unary,num_iter=100) #(orig_img,unary,num_iter=50)#
 			rw_up = F.interpolate(rw, scale_factor=4, mode='bilinear', align_corners=False)[0, :, :orig_img_size[0], :orig_img_size[1]]
-			rw_up[rw_up<0.8] = 0
+			
 			# ambiguous region classified to bg
 			# rw_up[-1] += 1e-5
 			rw_pred = torch.argmax(rw_up, dim=0)
-			mask = rw_up.sum(dim=0)
-			rw_pred[mask==0] = 254
+			# rw_up[rw_up<0.5] = 0
+			# mask = rw_up.sum(dim=0)
 			rw_pred += 1
 			rw_pred[rw_pred==21] = 0
+			# rw_pred[mask==0] = 21
 			rw_pred = rw_pred.cpu().numpy()
 			imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '.png'), rw_pred.astype(np.uint8))
-			# imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_light.png'), (rw_pred*15).astype(np.uint8))
+			# imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_light.png'), (rw_pred*10).astype(np.uint8))
 			# imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_clsbd.png'), (255*hms[-1][0,...,0].cpu().numpy()).astype(np.uint8))
 
 def clsbd_validate(model, clsbd, args):
@@ -476,7 +477,7 @@ def clsbd_validate(model, clsbd, args):
 		exit(0)
 	else:
 		n_gpus = torch.cuda.device_count()
-		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.train_list,
+		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.infer_list,
 																voc12_root=args.voc12_root, scales=args.cam_scales)
 		dataset = torchutils.split_dataset(dataset, n_gpus)
 

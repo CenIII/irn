@@ -46,7 +46,7 @@ def run(args):
 
 	clsbd = getattr(importlib.import_module(args.irn_network), 'Net')()
 	if args.clsbd_preload:
-		clsbd.load_state_dict(torch.load('exp/deeplabv2_cam21_meansig/sess/res50_clsbd_5_crf.pth'), strict=False)
+		clsbd.load_state_dict(torch.load('exp/deeplabv2_cam21_meansig/sess/res50_clsbd_5.pth'), strict=False)
 
 	# seed = 25
 	# torch.manual_seed(seed)
@@ -122,6 +122,7 @@ def run(args):
 				model = model_new
 		elif rt_key == 'clsbd':
 			# clsbd, _ = clsbd_alternate_train(train_data_loader, model, clsbd, clsbd_optimizer, avg_meter, timer, args, ep)
+			# import pdb;pdb.set_trace()
 			clsbd_validate(model_init, clsbd, args)
 
 	torch.cuda.empty_cache()
