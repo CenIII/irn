@@ -133,7 +133,7 @@ class VOC12ImageDataset(Dataset):
         name_str = decode_int_filename(name)
 
         img = np.asarray(imageio.imread(get_img_path(name_str, self.voc12_root)))
-
+        mask = []
         if self.resize_long:
             img = imutils.random_resize_long(img, self.resize_long[0], self.resize_long[1])
 
@@ -155,7 +155,7 @@ class VOC12ImageDataset(Dataset):
         if self.to_torch:
             img = imutils.HWC_to_CHW(img)
             mask = imutils.HWC_to_CHW(mask)
-        mask = mask[0:1]
+            mask = mask[0:1]
         return {'name': name, 'img': img, 'mask': mask}
 
 class VOC12ClassificationDataset(VOC12ImageDataset):

@@ -327,7 +327,7 @@ def _seg_label_infer_worker(process_id, model, dataset, args, label_out_dir):
 			# imageio.imsave(os.path.join(args.valid_model_out_dir, img_name + '_light.png'), (rw_pred*15).astype(np.uint8))
 			# imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_clsbd.png'), (255*hms[-1][0,...,0].cpu().numpy()).astype(np.uint8))
 
-def _seg_validate_infer_worker(process_id, model, dataset, args, use_crf=False):
+def _seg_validate_infer_worker(process_id, model, dataset, args, use_crf=True):
 	databin = dataset[process_id]
 	n_gpus = torch.cuda.device_count()
 	data_loader = DataLoader(databin, batch_size=1, shuffle=False, num_workers=args.num_workers // n_gpus, pin_memory=False)
