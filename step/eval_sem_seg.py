@@ -22,8 +22,8 @@ def run(args):
     preds = []
     qdar = tqdm.tqdm(dataset.ids,total=len(dataset.ids),ascii=True)
     for id in qdar:
-        cls_labels = imageio.imread(os.path.join('exp/deeplabv2_cam21_meansig/result/sem_seg5', id + '.png')).astype(np.uint8)
-        cls_labels[cls_labels == 255] = 0
+        cls_labels = imageio.imread(os.path.join('exp/deeplabv2_cam21_meansig/result/ir_label4', id + '.png')).astype(np.uint8)
+        # cls_labels[cls_labels == 255] = 0
         preds.append(cls_labels.copy())
         # keys = np.unique(cls_labels)
     confusion = calc_semantic_segmentation_confusion(preds, labels)#[:21, :21] #[labels[ind] for ind in ind_list]
@@ -32,8 +32,8 @@ def run(args):
     resj = confusion.sum(axis=0)
     gtjresj = np.diag(confusion)
     denominator = gtj + resj - gtjresj
-    fp = 1. - gtj / denominator
-    fn = 1. - resj / denominator
+    fp = (1. - gtj / denominator)[:21]
+    fn = (1. - resj / denominator)[:21]
     iou = (gtjresj / denominator)[:21]
 
     print("fp and fn:")

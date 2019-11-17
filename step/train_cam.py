@@ -152,7 +152,7 @@ def run(args):
 		if rt_key == 'model':
 			model = getattr(importlib.import_module(args.seg_network), 'DeepLabV2_ResNet50_MSC')(21)
 			# model = reload_res50(model)
-			model.load_state_dict(torch.load('exp/deeplabv2_cam21_meansig/sess/res50_cam_6.pth'), strict=False)
+			model.load_state_dict(torch.load('exp/deeplabv2_cam21_meansig/sess/res50_cam_6_637.pth'), strict=False)
 			model_optimizer = get_model_optimizer(model, args, 10*max_step)
 			best_miou = 0
 			miou = -1
@@ -173,10 +173,10 @@ def run(args):
 		elif rt_key == 'clsbd':
 			# import pdb;pdb.set_trace()
 			model = getattr(importlib.import_module(args.seg_network), 'DeepLabV2_ResNet50_MSC')(21)
-			# model = reload_res50(model)
-			model.load_state_dict(torch.load('exp/deeplabv2_cam21_meansig/sess/res50_cam_6_crf.pth'), strict=False)
+			# # model = reload_res50(model)
+			model.load_state_dict(torch.load('exp/deeplabv2_cam21_meansig/sess/res50_cam_6_637.pth'), strict=False)
 			clsbd = getattr(importlib.import_module(args.irn_network), 'Net')()
-			clsbd.load_state_dict(torch.load('exp/deeplabv2_cam21_meansig/sess/res50_clsbd_5_crf.pth'), strict=False)
+			clsbd.load_state_dict(torch.load('exp/deeplabv2_cam21_meansig/sess/res50_clsbd_5.pth'), strict=False)
 
 			clsbd_optimizer = get_clsbd_optimizer(clsbd, args, 3*max_step)
 			is_max_step = False

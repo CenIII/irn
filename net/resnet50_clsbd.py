@@ -124,7 +124,8 @@ class Net(nn.Module):
 
         self.backbone = nn.ModuleList([self.stage1, self.stage2, self.stage3, self.stage4, self.stage5])
         self.edge_layers = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge3, self.fc_edge4, self.fc_edge5, self.fc_edge6])
-
+        self.sobel = Sobel()
+        
     def infer_clsbd(self, x): # no sigmoid
         x1 = self.stage1(x).detach()
         x2 = self.stage2(x1).detach()
@@ -163,8 +164,8 @@ class Net(nn.Module):
 
     def infer_crf(self,clsbd, unary, num_iter=1, mask=None):
         clsbd = clsbd[...,:unary.shape[-2],:unary.shape[-1]]
-        # if not self.training:
-        #     clsbd = self.sobel.thin_edge(clsbd)
+        if not self.training:
+            clsbd = self.sobel.thin_edge(clsbd)
         pred = self.convcrf(unary, clsbd, num_iter=num_iter, mask=mask)
         hms = [unary,clsbd.repeat(1,21,1,1)]
         if not self.training:

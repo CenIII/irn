@@ -6,6 +6,7 @@ from pydensecrf.utils import unary_from_labels
 from PIL import Image
 import torch
 import torch.nn.functional as F
+import cv2 
 
 def pil_resize(img, size, order):
     if size[0] == img.shape[0] and size[1] == img.shape[1]:
@@ -415,4 +416,33 @@ class Sobel:
         x_nms = self.nms(x)
         x_thin = self.denoise(x_nms)
         # x_thin = self.directed_nms(x_thin)
+        # mask = self.erode(x_thin)
+        # x_thin = x_thin * mask[None,None,:,:]
         return x_thin
+    def erode(self, x):
+        # import pdb;pdb.set_trace()
+        x = x.squeeze().data.cpu().numpy()
+        x = (x*255).astype(np.uint8)
+        # img = cv2.imread('sofsk.png',0)
+        size = np.size(x)
+        skel = np.zeros(x.shape,np.uint8)
+        
+        ret,img = cv2.threshold(x,50,255,0)
+        # img = cv2.adaptiveThreshold(x,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,\
+        #     cv2.THRESH_BINARY,11,2)
+        element = cv2.getStructuringElement(cv2.MORPH_CROSS,(3,3))
+        done = False
+        
+        while( not done):
+            eroded = cv2.erode(img,element)
+            temp = cv2.dilate(eroded,element)
+            temp = cv2.subtract(img,temp)
+            skel = cv2.bitwise_or(skel,temp)
+            img = eroded.copy()
+        
+            zeros = size - cv2.countNonZero(img)
+            if zeros==size:
+                done = True
+        import pdb;pdb.set_trace()
+        skel[skel>0] = 1
+        return torch.from_numpy(skel).type(torch.FloatTensor).cuda()

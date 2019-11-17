@@ -430,6 +430,10 @@ class MessagePassingCol():
 				
 			# gaussian = 1. - gaussian
 			gaussian[:,span,span] = 0.
+
+			# # TODO: 高boundary点周围降低boundary
+			# # import pdb;pdb.set_trace()
+			# gaussian = gaussian * (1 - features.unsqueeze(2))
 		else:
 			for dx in range(-span, span + 1):
 				for dy in range(-span, span + 1):
@@ -687,6 +691,7 @@ class ConvCRF(nn.Module):
 				prediction[:,1:] = (prediction[:,1:]+1e-5)*(1 - prediction[:,0:1])/(prediction[:,1:]+1e-5).sum(dim=1, keepdim=True)
 			# prediction /= prediction.sum(dim=1, keepdim=True)
 			# △ 1 Message passing
+			# prediction = prediction * (1-clsbd)
 			messages, input_col, pl = self.kernel.compute(prediction)
 			_,C,K,_,W,H = input_col.shape
 			input_col = input_col*self.kernel.kp_mask
