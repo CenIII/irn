@@ -83,7 +83,8 @@ def get_clsbd_optimizer(clsbd,args,clsbd_max_step):
 	# clsbd optimizer 
 	clsbd_param_groups = clsbd.trainable_parameters()
 	clsbd_optimizer = torchutils.PolyOptimizer([
-		{'params': clsbd_param_groups, 'lr': 1*args.irn_learning_rate, 'weight_decay': args.irn_weight_decay},
+		{'params': clsbd_param_groups[0], 'lr': 1*args.irn_learning_rate, 'weight_decay': args.irn_weight_decay},
+		{'params': clsbd_param_groups[1], 'lr': 0.1*args.irn_learning_rate, 'weight_decay': args.irn_weight_decay},
 	], lr=args.irn_learning_rate, weight_decay=args.irn_weight_decay, max_step=clsbd_max_step, set_step=0)
 
 	return clsbd_optimizer 
@@ -176,7 +177,7 @@ def run(args):
 			# # model = reload_res50(model)
 			model.load_state_dict(torch.load('exp/deeplabv2_cam21_meansig/sess/res50_cam_6_637.pth'), strict=False)
 			clsbd = getattr(importlib.import_module(args.irn_network), 'Net')()
-			clsbd.load_state_dict(torch.load('exp/deeplabv2_cam21_meansig/sess/res50_clsbd_5.pth'), strict=False)
+			clsbd.load_state_dict(torch.load('exp/deeplabv2_cam21_meansig/sess/res50_clsbd_7.pth'), strict=False)
 
 			clsbd_optimizer = get_clsbd_optimizer(clsbd, args, 3*max_step)
 			is_max_step = False
