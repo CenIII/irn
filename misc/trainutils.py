@@ -45,6 +45,7 @@ def determine_routine(ep, args):
 	return routine
 
 def eval_metrics(split_name, label_dir, args, logger=None):
+	# import pdb;pdb.set_trace()
 	dataset = VOCSemanticSegmentationDataset(split=split_name, data_dir=args.voc12_root)
 	labels = [dataset.get_example_by_keys(i, (1,))[0] for i in range(len(dataset))]
 	preds = []
@@ -547,7 +548,7 @@ def model_validate(model, args, ep, logger, make_label=False):
 		else:
 			print('Validate: 2. Making seg preds for val set...')
 			n_gpus = torch.cuda.device_count()
-			dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.infer_list,
+			dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.train_list,
 																	voc12_root=args.voc12_root, scales=args.cam_scales)
 			dataset = torchutils.split_dataset(dataset, n_gpus)
 
@@ -737,24 +738,41 @@ def _clsbd_label_infer_worker(process_id, model, clsbd, dataset, args, label_out
 			for k in range(len(pack['img'])):
 				pack['img'][k] = pack['img'][k].cuda(non_blocking=True)
 			
-			# seg_output = model.base.forwardMSF(pack['img']) #(orig_img)#
-			# unary, _ = make_seg_unary(seg_output,label,args,orig_size=orig_img_size)
+			seg_output = model.base.forwardMSF(pack['img']) #(orig_img)#
+			unary_1, _ = make_seg_unary(seg_output,label,args,orig_size=orig_img_size)
 			unary = make_seg_unary_from_file(img_name,orig_size=orig_img_size)
 			# pack['img'] for clsbd forward
-			rw, hms = clsbd.forwardMSF(pack['img'],unary,num_iter=100) #(orig_img,unary,num_iter=50)#
+
+			# smaller kernel
+			# clsbd.usecrf(2)
+			# rw, hms = clsbd.forwardMSF(pack['img'],unary,num_iter=120) #(orig_img,unary,num_iter=50)#
+			# clsbd.usecrf(1)
+			rw, hms = clsbd.forwardMSF(pack['img'],unary_1,num_iter=100) #(orig_img,unary,num_iter=50)#
+			# import pdb;pdb.set_trace()
+
 			rw_up = F.interpolate(rw, scale_factor=4, mode='bilinear', align_corners=False)[0, :, :orig_img_size[0], :orig_img_size[1]]
-			# rw_up[rw_up<0.25] = 0
-			# # ambiguous region classified to bg
-			# rw_up[0] += 1e-5
-			
-			rw_pred = torch.argmax(rw_up, dim=0)
-			rw_up[rw_up<0.8] = 0
-			rw_mask = rw_up.sum(dim=0)
-			rw_pred[rw_mask==0] = 25
+			unary_up = F.interpolate(unary, scale_factor=4, mode='bilinear', align_corners=False)[0, :, :orig_img_size[0], :orig_img_size[1]]
+			rw_max = torch.argmax(rw_up,dim=0)
+			rw_bit = rw_up.data.new(rw_up.shape).fill_(0)
+			rw_bit = torch.scatter(rw_bit,0,rw_max[None,:,:],1)
+			unary_max = torch.argmax(unary_up,dim=0)
+			unary_bit = unary_up.data.new(unary_up.shape).fill_(0)
+			unary_bit = torch.scatter(unary_bit,0,unary_max[None,:,:],1)
+
+			mg_fg = (unary_bit + 0.5*rw_bit)[1:]
+			mask = mg_fg.sum(dim=0)
+			rw_pred = torch.argmax(mg_fg,dim=0) + 1
+			rw_pred[mask==0] = 0
+
+
+			# rw_pred = torch.argmax(rw_up, dim=0)
+			# rw_up[rw_up<0.8] = 0
+			# rw_mask = rw_up.sum(dim=0)
+			# rw_pred[rw_mask==0] = 25
 			rw_pred = rw_pred.cpu().numpy()
 			imageio.imsave(os.path.join(label_out_dir, img_name + '.png'), rw_pred.astype(np.uint8))
 			imageio.imsave(os.path.join(label_out_dir, img_name + '_light.png'), (rw_pred*10).astype(np.uint8))
-			imageio.imsave(os.path.join(label_out_dir, img_name + '_clsbd.png'), (255*hms[-2][0,...,0].cpu().numpy()).astype(np.uint8))
+			# imageio.imsave(os.path.join(label_out_dir, img_name + '_clsbd.png'), (255*hms[-2][0,...,0].cpu().numpy()).astype(np.uint8))
 
 def clsbd_validate(model, clsbd, args, ep):
 	# 分两步，第一步multiprocess infer结果并保存到validate/clsbd/epoch#
@@ -764,7 +782,7 @@ def clsbd_validate(model, clsbd, args, ep):
 	# step 1: make crf results
 	if args.quick_infer:
 		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.quick_list,
-																voc12_root=args.voc12_root, scales=args.cam_scales)
+																voc12_root=args.voc12_root, scales=(1.0,1.5,0.5))#args.cam_scales)
 		dataset = torchutils.split_dataset(dataset, 1)
 
 		infer_out_dir = args.valid_clsbd_out_dir
@@ -775,7 +793,7 @@ def clsbd_validate(model, clsbd, args, ep):
 	else:
 		print('Validate: 1. Making crf inference labels...')
 		n_gpus = torch.cuda.device_count()
-		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.train_list,
+		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.infer_list,
 																voc12_root=args.voc12_root, scales=args.cam_scales)
 		dataset = torchutils.split_dataset(dataset, n_gpus)
 		label_out_dir = args.sem_seg_out_dir+str(ep)
@@ -786,6 +804,6 @@ def clsbd_validate(model, clsbd, args, ep):
 		
 		print('Validate: 2. Eval labels...')
 		# step 2: eval results
-		miou = eval_metrics('train', args.valid_clsbd_out_dir, args)
+		miou = eval_metrics('train', label_out_dir, args)
 		exit(0)
 		return None#miou

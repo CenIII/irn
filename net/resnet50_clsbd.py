@@ -73,7 +73,60 @@ infer_conf = {
 
     "pyinn": False
 }
+infer_conf2 = {
+    'filter_size': 5,
+    'blur': 2,
+    'merge': False,
+    'norm': 'none',
+    'weight': 'vector',
+    "unary_weight": 1.,
+    "weight_init": 1.,
+    "pos_weight":1.,
+    "neg_weight":1.,
 
+    'trainable': False,
+    'convcomp': True,
+    'logsoftmax': True,  # use logsoftmax for numerical stability
+    'softmax': True,
+    'final_softmax': False,
+
+    'pos_feats': {
+        'sdims': 50,
+        'compat': 0.,
+    },
+    'col_feats': {
+        # 'sdims': 80,
+        # 'schan': 13,   # schan depend on the input scale.
+        #                # use schan = 13 for images in [0, 255]
+        #                # for normalized images in [-0.5, 0.5] try schan = 0.1
+        'compat': 1.,
+        'use_bias': False
+    },
+    "trainable_bias": False,
+
+    "pyinn": False
+}
+
+
+class _ASPP(nn.Module):
+    """
+    Atrous spatial pyramid pooling (ASPP)
+    """
+
+    def __init__(self, in_ch, out_ch, rates):
+        super(_ASPP, self).__init__()
+        for i, rate in enumerate(rates):
+            self.add_module(
+                "c{}".format(i),
+                nn.Conv2d(in_ch, out_ch, 3, 1, padding=rate, dilation=rate, bias=True),
+            )
+
+        for m in self.children():
+            nn.init.normal_(m.weight, mean=0, std=0.01)
+            nn.init.constant_(m.bias, 0)
+
+    def forward(self, x):
+        return sum([stage(x) for stage in self.children()])
 
 class Net(nn.Module):
 
@@ -123,14 +176,14 @@ class Net(nn.Module):
         self.convcrf = ClsbdCRF(default_conf, nclasses=21)
 
         self.backbone = nn.ModuleList([self.stage1, self.stage2, self.stage3, self.stage4, self.stage5])
-        self.last_two = nn.ModuleList([self.stage4, self.stage5])
+        self.last_two = nn.ModuleList([self.stage2, self.stage3, self.stage4, self.stage5])
         self.edge_layers = nn.ModuleList([self.fc_edge1, self.fc_edge2, self.fc_edge3, self.fc_edge4, self.fc_edge5, self.fc_edge6])
         self.sobel = Sobel()
 
     def infer_clsbd(self, x): # no sigmoid
         x1 = self.stage1(x).detach()
-        x2 = self.stage2(x1).detach()
-        x3 = self.stage3(x2).detach()
+        x2 = self.stage2(x1)#.detach()
+        x3 = self.stage3(x2)#.detach()
         x4 = self.stage4(x3)#.detach()
         x5 = self.stage5(x4)#.detach()
 
@@ -217,9 +270,17 @@ class Net(nn.Module):
 
     def eval(self,mode=True):
         super().eval()
-        self.convcrf = ClsbdCRF(infer_conf, nclasses=21).cuda()
-        self.convcrf.eval()
+        self.convcrf1 = ClsbdCRF(infer_conf, nclasses=21).cuda()
+        self.convcrf1.eval()
+        self.convcrf2 = ClsbdCRF(infer_conf2, nclasses=21).cuda()
+        self.convcrf2.eval()
+        self.convcrf = self.convcrf1
         return self
+    def usecrf(self,ind):
+        if ind==1:
+            self.convcrf = self.convcrf1
+        else:
+            self.convcrf = self.convcrf2
 
 class EdgeDisplacement(Net):
 
