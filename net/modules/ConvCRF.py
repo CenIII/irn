@@ -610,7 +610,7 @@ class ConvCRF(nn.Module):
 
 		self.pos_weight = pos_weight
 		self.neg_weight = neg_weight
-
+		self.bgreduce = 0.8
 		if self.use_gpu:
 			if not torch.cuda.is_available():
 				logging.error("GPU mode requested but not avaible.")
@@ -686,7 +686,7 @@ class ConvCRF(nn.Module):
 		norm = False
 		for i in range(num_iter):
 			if not self.training:
-				prediction[:,0] *= 0.85
+				prediction[:,0] *= self.bgreduce
 				# import pdb;pdb.set_trace()
 				prediction[:,1:] = (prediction[:,1:]+1e-5)*(1 - prediction[:,0:1])/(prediction[:,1:]+1e-5).sum(dim=1, keepdim=True)
 			# prediction /= prediction.sum(dim=1, keepdim=True)

@@ -153,21 +153,21 @@ def run(args):
 		if rt_key == 'model':
 			model = getattr(importlib.import_module(args.seg_network), 'DeepLabV2_ResNet50_MSC')(21)
 			# model = reload_res50(model)
-			model.load_state_dict(torch.load('exp/deeplabv2_cam21_meansig/sess/res50_cam_8.pth'), strict=False)
+			model.load_state_dict(torch.load('exp/gradual_expand/sess/res50_cam_8.pth'), strict=False)
 			model_optimizer = get_model_optimizer(model, args, 10*max_step)
 			best_miou = 0
 			miou = -1
 			is_max_step = False
 			# model_optimizer.last_epoch = 1068
-			# model_optimizer.step(epoch=2645)
+			model_optimizer.step(epoch=3305)
 			while True:
-				# model_new, is_max_step = model_alternate_train(model_train_data_loader, model, model_optimizer, avg_meter, timer, args, ep, logger)
+				model_new, is_max_step = model_alternate_train(model_train_data_loader, model, model_optimizer, avg_meter, timer, args, ep, logger)
 				# import pdb;pdb.set_trace()
-				miou = model_validate(model, args, ep, logger, make_label=True)
-				exit(0)
+				miou = model_validate(model_new, args, ep, logger, make_label=False)
+				# exit(0)
 				if is_max_step: #miou < best_miou or 
-					# model_validate(model_new, args, ep, make_label=True)
-					exit(0)
+					model_validate(model_new, args, ep, logger, make_label=True)
+					# exit(0)
 					break
 				best_miou = miou
 				model = model_new
@@ -177,16 +177,17 @@ def run(args):
 			# # # model = reload_res50(model)
 			# model.load_state_dict(torch.load('exp/deeplabv2_cam21_meansig/sess/res50_cam_8.pth'), strict=False)
 			clsbd = getattr(importlib.import_module(args.irn_network), 'Net')()
-			# clsbd.load_state_dict(torch.load('exp/deeplabv2_cam21_meansig/sess/res50_clsbd_7_lastfour.pth'), strict=False)
+			# clsbd.load_state_dict(torch.load('exp/gradual_expand/sess/res50_clsbd_7.pth'), strict=False)
 
 			clsbd_optimizer = get_clsbd_optimizer(clsbd, args, 3*max_step)
 			is_max_step = False
 			while not is_max_step:
 				clsbd, is_max_step = clsbd_alternate_train(clsbd_train_data_loader, clsbd, clsbd_optimizer, avg_meter, timer, args, ep)
-			exit(0)
+			# exit(0)
 			# import pdb;pdb.set_trace()
-			model_in = model_init if ep==5 else model
+			model_in = model_init# if ep==5 else model
 			# import pdb;pdb.set_trace()
-			clsbd_validate(model_in, clsbd, args, ep)
+			clsbd_validate(model_in, clsbd, args, ep, logger)
+			# exit(0)
 
 	torch.cuda.empty_cache()
