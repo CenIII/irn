@@ -628,12 +628,13 @@ def make_seg_unary(seg_output,label,args, mask=None, orig_size=None):
 
 def make_seg_unary_from_file(img_name, orig_size=None):
 	# import pdb;pdb.set_trace()
-	seg_pred = torch.from_numpy(imageio.imread('exp/deeplabv2_cam21_meansig/result/validate/model/'+img_name+'.png')).type(torch.LongTensor).cuda()
-
+	seg_pred = torch.from_numpy(imageio.imread('exp/deeplabv2_cam21_meansig/result/ir_label6/'+img_name+'.png')).type(torch.LongTensor).cuda()
+	seg_pred[seg_pred==255] = 21
+	seg_pred = seg_pred.type(torch.LongTensor).cuda()
 	strided_size = imutils.get_strided_size(orig_size, 4)
-	unary = torch.zeros((1,21,*orig_size)).cuda()
-	unary = torch.scatter(unary,1,seg_pred[None,None,:,:],1)
-	unary = F.interpolate(unary, strided_size, mode='bilinear', align_corners=False) #[16, 21, 128, 128]
+	unary = torch.zeros((1,22,*orig_size)).cuda()
+	unary = torch.scatter(unary,1,seg_pred[None,None,:,:],1)[:,:21]
+	# unary = F.interpolate(unary, strided_size, mode='bilinear', align_corners=False) #[16, 21, 128, 128]
 	
 	return unary
 
@@ -740,19 +741,22 @@ def _clsbd_label_infer_worker(process_id, model, clsbd, dataset, args, label_out
 			
 			seg_output = model.base.forwardMSF(pack['img']) #(orig_img)#
 			unary_1, _ = make_seg_unary(seg_output,label,args,orig_size=orig_img_size)
-			unary = make_seg_unary_from_file(img_name,orig_size=orig_img_size)
+			
 			# pack['img'] for clsbd forward
-
 			# smaller kernel
 			# clsbd.usecrf(2)
 			# rw, hms = clsbd.forwardMSF(pack['img'],unary,num_iter=120) #(orig_img,unary,num_iter=50)#
 			# clsbd.usecrf(1)
 			rw, hms = clsbd.forwardMSF(pack['img'],unary_1,num_iter=100) #(orig_img,unary,num_iter=50)#
 			# import pdb;pdb.set_trace()
-
 			rw_up = F.interpolate(rw, scale_factor=4, mode='bilinear', align_corners=False)[0, :, :orig_img_size[0], :orig_img_size[1]]
-			unary_up = F.interpolate(unary, scale_factor=4, mode='bilinear', align_corners=False)[0, :, :orig_img_size[0], :orig_img_size[1]]
+			unary = make_seg_unary_from_file(img_name,orig_size=orig_img_size)
+			unary_up = unary[0]#F.interpolate(unary, scale_factor=4, mode='bilinear', align_corners=False)[0, :, :orig_img_size[0], :orig_img_size[1]]
+			
 			rw_max = torch.argmax(rw_up,dim=0)
+			rw_up[rw_up<0.8] = 0
+			mask = rw_up.sum(dim=0)
+			rw_max[mask==0] = 0
 			rw_bit = rw_up.data.new(rw_up.shape).fill_(0)
 			rw_bit = torch.scatter(rw_bit,0,rw_max[None,:,:],1)
 			unary_max = torch.argmax(unary_up,dim=0)
@@ -796,7 +800,7 @@ def clsbd_validate(model, clsbd, args, ep):
 		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.infer_list,
 																voc12_root=args.voc12_root, scales=args.cam_scales)
 		dataset = torchutils.split_dataset(dataset, n_gpus)
-		label_out_dir = args.sem_seg_out_dir+str(ep)
+		label_out_dir = args.valid_clsbd_out_dir#args.sem_seg_out_dir+str(ep)
 		os.makedirs(label_out_dir, exist_ok=True)
 		multiprocessing.spawn(_clsbd_label_infer_worker, nprocs=n_gpus, args=(model, clsbd, dataset, args, label_out_dir), join=True)
 
