@@ -462,6 +462,8 @@ def _clsbd_validate_infer_worker(process_id, model, clsbd, dataset, args):
 			unary_up = unary[0]#F.interpolate(unary, scale_factor=4, mode='bilinear', align_corners=False)[0, :, :orig_img_size[0], :orig_img_size[1]]
 			
 			rw_max = torch.argmax(rw_up,dim=0)
+			rw_max += 1
+			rw_max[rw_max==21] = 0
 			rw_up[rw_up<0.8] = 0
 			mask = rw_up.sum(dim=0)
 			rw_max[mask==0] = 0
