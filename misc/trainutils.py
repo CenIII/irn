@@ -548,6 +548,7 @@ def clsbd_alternate_train(train_data_loader, clsbd, optimizer, avg_meter, timer,
 	else:
 		timer.reset_stage()
 		torch.save(clsbd.module.state_dict(), args.irn_weights_name + '_' + str(ep) + '.pth')
+	torch.cuda.empty_cache()
 	return clsbd.module, optimizer.is_max_step()
 
 def _clsbd_label_infer_worker(process_id, model, clsbd, dataset, args, label_out_dir, ir_label_dir, is_init):
@@ -636,5 +637,6 @@ def clsbd_validate(model, clsbd, args, ep):
 		print('Validate: 2. Eval labels...')
 		# step 2: eval results
 		miou = eval_metrics('train', label_out_dir, args)
+		torch.cuda.empty_cache()
 		exit(0)
 		return None#miou
