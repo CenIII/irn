@@ -170,18 +170,6 @@ def model_init_train(train_data_loader, val_data_loader, model, optimizer, avg_m
 Seg train
 '''
 
-def make_seg_label(crf_out):
-	# import pdb;pdb.set_trace()
-	crf_out = F.interpolate(crf_out, (32,32), mode='bilinear', align_corners=False) #[16, 21, 128, 128]
-	highent = (-crf_out * torch.log(torch.clamp(crf_out,1e-5,1.))).sum(dim=1)/np.log(21)
-	highent[highent>0.8] = 1.
-	highent[highent<1.] = 0
-	# crf_out[crf_out<0.3] = 0
-	# crf_out[:,-1] += 1e-5
-	label = torch.argmax(crf_out,dim=1)
-	label[highent>0.5] = 21
-	return label
-
 def compute_seg_loss(crit, seg_out, seg_label):
 	seg_out_lg = F.log_softmax(seg_out,dim=1)
 	loss = crit(seg_out_lg, seg_label)
@@ -261,74 +249,7 @@ def model_alternate_train(train_data_loader, model, scheduler, avg_meter, timer,
 	torch.cuda.empty_cache()
 	return model.module, scheduler.is_max_step()
 
-# TODO: modify so _seg_label_infer_worker can use
-def make_seg2clsbd_label(img,seg_output,label,args,img_denorm):
-	'''
-	CRF version
-	Given seg_output of shape ([16, 21, 32, 32]), we make label for clsbd network.
-	return: clsbd_label
-	'''
-	# 0. detach off
-	seg_output = seg_output.detach()
-	# 1. upsample
-	w,h = seg_output.shape[-2:]
-	seg_output = F.interpolate(seg_output, (w*4,h*4), mode='bilinear', align_corners=False) #[16, 21, 128, 128]
-	# if mask is not None:
-	# 	mask = mask.detach()
-	# 	mask = F.interpolate(mask, (w*4,h*4), mode='bilinear', align_corners=False) #[16, 21, 128, 128]
-
-	norm_seg = seg_output / F.adaptive_max_pool2d(seg_output, (1, 1)) + 1e-5
-	norm_seg = norm_seg * label[:,:,None,None]
-	fg = norm_seg[:,1:]
-	img_down = F.interpolate(img, (w*4,h*4), mode='bilinear', align_corners=False)
-	N = img_down.shape[0]
-	# crf fg_conf
-	# crf bg_conf
-	fg_conf_cam = F.pad(fg, (0, 0, 0, 0, 1, 0, 0, 0), mode='constant',value=args.conf_fg_thres)
-	bg_conf_cam = F.pad(fg, (0, 0, 0, 0, 1, 0, 0, 0), mode='constant',value=args.conf_bg_thres)
-	for i in range(N):
-		img_dn = img_denorm(img_down[i].permute(1,2,0).data.cpu().numpy()).astype(np.ubyte)
-		keys = label[i].nonzero()[:,0].cpu().numpy()
-		fg_conf_pane = torch.argmax(fg_conf_cam[i][keys], dim=0).cpu().numpy()
-		fg_conf = torch.from_numpy(keys[imutils.crf_inference_label(img_dn, fg_conf_pane, n_labels=keys.shape[0])]).cuda().unsqueeze(0)
-
-		bg_conf_pane = torch.argmax(bg_conf_cam[i][keys], dim=0).cpu().numpy()
-		bg_conf = torch.from_numpy(keys[imutils.crf_inference_label(img_dn, bg_conf_pane, n_labels=keys.shape[0])]).cuda().unsqueeze(0)
-		
-	# combine two confs.
-	conf = fg_conf.clone()
-	conf[fg_conf == 0] = 255
-	conf[bg_conf + fg_conf == 0] = 0
-	return conf
-
-# def _seg_label_infer_worker(process_id, model, dataset, args, label_out_dir):
-# 	databin = dataset[process_id]
-# 	n_gpus = torch.cuda.device_count()
-# 	data_loader = DataLoader(databin, batch_size=1, shuffle=False, num_workers=args.num_workers // n_gpus, pin_memory=False)
-# 	img_denorm = torchutils.ImageDenorm()
-
-# 	with torch.no_grad(), cuda.device(process_id+1):
-# 		model.cuda()
-# 		qdar = tqdm.tqdm(enumerate(data_loader),total=len(data_loader),ascii=True,position=process_id)
-# 		for iter, pack in qdar:
-# 			img_name = voc12.dataloader.decode_int_filename(pack['name'][0])
-# 			img = pack['orig_img'].cuda(non_blocking=True)
-# 			orig_img_size = np.asarray(pack['size'])
-# 			label = pack['label'].cuda(non_blocking=True)
-# 			for k in range(len(pack['img'])):
-# 				pack['img'][k] = pack['img'][k].cuda(non_blocking=True)
-			
-# 			seg_output = model.base.forwardMSF(pack['img']) #(orig_img)#
-# 			seg_label = make_seg2clsbd_label(img,seg_output,label,args,img_denorm)
-			
-# 			# rw_up = F.interpolate(seg_label, scale_factor=16, mode='bilinear', align_corners=False)[0, :, :orig_img_size[0], :orig_img_size[1]]
-# 			rw_pred = imutils.pil_resize(seg_label[0].cpu().numpy().astype('uint8'),orig_img_size,0)
-# 			# rw_pred = torch.argmax(rw_up, dim=0).cpu().numpy()
-# 			imageio.imsave(os.path.join(label_out_dir, img_name + '.png'), rw_pred.astype(np.uint8))
-# 			# imageio.imsave(os.path.join(args.valid_model_out_dir, img_name + '_light.png'), (rw_pred*15).astype(np.uint8))
-# 			# imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_clsbd.png'), (255*hms[-1][0,...,0].cpu().numpy()).astype(np.uint8))
-
-def _seg_validate_infer_worker(process_id, model, dataset, args, use_crf=True):
+def _seg_validate_infer_worker(process_id, model, dataset, args, use_crf=False):
 	databin = dataset[process_id]
 	n_gpus = torch.cuda.device_count()
 	data_loader = DataLoader(databin, batch_size=1, shuffle=False, num_workers=args.num_workers // n_gpus, pin_memory=False)
@@ -346,19 +267,14 @@ def _seg_validate_infer_worker(process_id, model, dataset, args, use_crf=True):
 			rw_up = F.interpolate(seg_output, scale_factor=8, mode='bilinear', align_corners=False)[0, :, :orig_img_size[0], :orig_img_size[1]]
 			rw_up = F.softmax(rw_up,dim=0)
 			rw_pred = torch.argmax(rw_up, dim=0)
-			
-			# rw_up[rw_up<0.9] = 0
-			# rw_mask = rw_up.sum(dim=0)
-			# rw_pred[rw_mask==0] = 25
-
 			rw_pred = rw_pred.cpu().numpy()
-			# import pdb;pdb.set_trace()
 			if use_crf:
 				img = np.asarray(imageio.imread(voc12.dataloader.get_img_path(img_name, args.voc12_root)))
 				rw_pred = imutils.crf_inference_label(img, rw_pred, n_labels=21)
 			imageio.imsave(os.path.join(args.valid_model_out_dir, img_name + '.png'), rw_pred.astype(np.uint8))
 			# imageio.imsave(os.path.join(args.valid_model_out_dir, img_name + '_light.png'), (rw_pred*10).astype(np.uint8))
 			# imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_clsbd.png'), (255*hms[-1][0,...,0].cpu().numpy()).astype(np.uint8))
+
 def _seg_validate_infer_worker_on_train(process_id, model, dataset, args, use_crf=True):
 	databin = dataset[process_id]
 	n_gpus = torch.cuda.device_count()
@@ -465,54 +381,6 @@ def _seg_label_infer_worker(process_id, model, dataset, args, label_out_dir, use
 			# imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_clsbd.png'), (255*hms[-1][0,...,0].cpu().numpy()).astype(np.uint8))
 
 
-def _seg_validate_infer_worker_double_thres(process_id, model, dataset, args):
-	databin = dataset[process_id]
-	n_gpus = torch.cuda.device_count()
-	data_loader = DataLoader(databin, batch_size=1, shuffle=False, num_workers=args.num_workers // n_gpus, pin_memory=False)
-
-	with torch.no_grad(), cuda.device(process_id):
-		model.cuda()
-		qdar = tqdm.tqdm(enumerate(data_loader),total=len(data_loader),ascii=True,position=process_id)
-		for iter, pack in qdar:
-			img_name = voc12.dataloader.decode_int_filename(pack['name'][0])
-			orig_img_size = np.asarray(pack['size'])
-			label = pack['label'].cuda(non_blocking=True)
-			for k in range(len(pack['img'])):
-				pack['img'][k] = pack['img'][k].cuda(non_blocking=True)
-			seg_output = model.base.forwardMSF(pack['img']) #(orig_img)#
-
-			# seg_output = F.interpolate(seg_output, scale_factor=8, mode='bilinear', align_corners=False)[0, :, :orig_img_size[0], :orig_img_size[1]]
-			# rw_pred = torch.argmax(rw_up, dim=0).cpu().numpy()
-			norm_seg = seg_output / F.adaptive_max_pool2d(seg_output, (1, 1)) + 1e-5
-			norm_seg = norm_seg[:,1:] * label[:,1:,None,None]
-			fg = norm_seg
-			# crf fg_conf
-			# crf bg_conf
-			fg_conf = F.pad(fg, (0, 0, 0, 0, 0, 1, 0, 0), mode='constant',value=args.cam_eval_thres)
-			bg_conf = F.pad(fg, (0, 0, 0, 0, 0, 1, 0, 0), mode='constant',value=args.cam_eval_thres)
-			
-			max_mask = fg_conf.data.new(fg_conf.shape).fill_(0.)
-			fg_conf_pane = torch.argmax(fg_conf, dim=1).unsqueeze(1)
-			max_mask = torch.scatter(max_mask,dim=1,index=fg_conf_pane,value=1.)
-			fg_conf = fg_conf*max_mask
-
-			max_mask = bg_conf.data.new(bg_conf.shape).fill_(0.)
-			bg_conf_pane = torch.argmax(bg_conf, dim=1).unsqueeze(1)
-			max_mask = torch.scatter(max_mask,dim=1,index=bg_conf_pane,value=1.)
-			bg_conf = bg_conf*max_mask
-			bg_conf[:,-1:] = bg_conf[:,-1:]/args.conf_bg_thres#*0.7
-			# combine two confs.
-			clsbd_label = torch.cat((bg_conf[:,-1:],fg_conf[:,:-1]),dim=1)
-			clsbd_label[clsbd_label>0] = 1.
-			clsbd_label = F.interpolate(clsbd_label, scale_factor=8, mode='bilinear', align_corners=False)[0, :, :orig_img_size[0], :orig_img_size[1]]
-			rw_pred = torch.argmax(clsbd_label, dim=0).cpu().numpy()
-
-			imageio.imsave(os.path.join(args.valid_model_out_dir, img_name + '.png'), rw_pred.astype(np.uint8))
-			imageio.imsave(os.path.join(args.valid_model_out_dir, img_name + '_light.png'), (rw_pred*15).astype(np.uint8))
-			# imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_clsbd.png'), (255*hms[-1][0,...,0].cpu().numpy()).astype(np.uint8))
-
-
-
 def model_validate(model, args, ep, logger, make_label=False):
 	# import pdb;pdb.set_trace()
 	# 分两步，第一步multiprocess infer结果并保存到validate/model/epoch#
@@ -538,41 +406,24 @@ def model_validate(model, args, ep, logger, make_label=False):
 			label_out_dir = args.ir_label_out_dir+str(ep)
 			os.makedirs(label_out_dir, exist_ok=True)
 			multiprocessing.spawn(_seg_label_infer_worker, nprocs=n_gpus, args=(model, dataset, args, label_out_dir), join=True)
-			# _seg_label_infer_worker(0, model, dataset, args, label_out_dir)
-			# _seg_label_infer_worker(1, model, dataset, args, label_out_dir)
-			# _seg_label_infer_worker(2, model, dataset, args, label_out_dir)
-			# _seg_label_infer_worker(3, model, dataset, args, label_out_dir)
 			miou = eval_metrics('train', label_out_dir, args, logger=logger)
 			torch.cuda.empty_cache()
 			return
 		else:
 			print('Validate: 2. Making seg preds for val set...')
 			n_gpus = torch.cuda.device_count()
-			dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.train_list,
+			dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.val_list,
 																	voc12_root=args.voc12_root, scales=args.cam_scales)
 			dataset = torchutils.split_dataset(dataset, n_gpus)
 
-			multiprocessing.spawn(_seg_validate_infer_worker_on_train, nprocs=n_gpus, args=(model, dataset, args), join=True)
+			multiprocessing.spawn(_seg_validate_infer_worker, nprocs=n_gpus, args=(model, dataset, args), join=True)
 			# _seg_validate_infer_worker(0,model, dataset, args)
 			torch.cuda.empty_cache()
 			print('Validate: 3. Eval preds...')
 			# step 2: eval results
-			miou = eval_metrics('train', args.valid_model_out_dir, args, logger=logger)
+			miou = eval_metrics('val', args.valid_model_out_dir, args, logger=logger)
 			torch.cuda.empty_cache()
 
-			# print('Validate: 2. Making seg preds for val set...using double thres...')
-			# n_gpus = torch.cuda.device_count()
-			# dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.val_list,
-			# 														voc12_root=args.voc12_root, scales=args.cam_scales)
-			# dataset = torchutils.split_dataset(dataset, n_gpus)
-
-			# multiprocessing.spawn(_seg_validate_infer_worker_double_thres, nprocs=n_gpus, args=(model, dataset, args), join=True)
-			# # _seg_validate_infer_worker(0,model, dataset, args)
-			# torch.cuda.empty_cache()
-			# print('Validate: 3. Eval preds...')
-			# # step 2: eval results
-			# miou = eval_metrics('val', args.valid_model_out_dir, args, logger=logger)
-			# torch.cuda.empty_cache()
 			return miou
 
 '''
@@ -602,28 +453,6 @@ def make_seg_unary(seg_output,label,args, mask=None, orig_size=None):
 	norm_seg = F.softmax(seg_output,dim=1) #seg_output / F.adaptive_max_pool2d(seg_output, (1, 1)) + 1e-5
 	fg = norm_seg
 	
-	# fg[fg<0.9] = 0
-	# crf fg_conf
-	# crf bg_conf
-
-	# fg_conf = F.pad(fg, (0, 0, 0, 0, 0, 1, 0, 0), mode='constant',value=args.unary_fg_thres)
-	# bg_conf = F.pad(fg, (0, 0, 0, 0, 0, 1, 0, 0), mode='constant',value=args.unary_bg_thres)
-	
-	# max_mask = fg_conf.data.new(fg_conf.shape).fill_(0.)
-	# fg_conf_pane = torch.argmax(fg_conf, dim=1).unsqueeze(1)
-	# max_mask = torch.scatter(max_mask,dim=1,index=fg_conf_pane,value=1.)
-	# fg_conf = fg_conf*max_mask
-
-	# max_mask = bg_conf.data.new(bg_conf.shape).fill_(0.)
-	# bg_conf_pane = torch.argmax(bg_conf, dim=1).unsqueeze(1)
-	# max_mask = torch.scatter(max_mask,dim=1,index=bg_conf_pane,value=1.)
-	# bg_conf = bg_conf*max_mask
-	# bg_conf[:,-1:] = bg_conf[:,-1:]/args.conf_bg_thres#*0.7
-	# # combine two confs.
-	# clsbd_label = torch.cat((bg_conf[:,-1:],fg_conf[:,:-1]),dim=1)
-	# fg[fg<0.1] = 0
-	# clsbd_label[clsbd_label>0] = 1.
-	# fg[fg>0] = 1
 	return fg, mask
 
 def make_seg_unary_from_file(img_name, orig_size=None):
@@ -633,46 +462,8 @@ def make_seg_unary_from_file(img_name, orig_size=None):
 	seg_pred = seg_pred.type(torch.LongTensor).cuda()
 	strided_size = imutils.get_strided_size(orig_size, 4)
 	unary = torch.zeros((1,22,*orig_size)).cuda()
-	unary = torch.scatter(unary,1,seg_pred[None,None,:,:],1)[:,:21]
-	# unary = F.interpolate(unary, strided_size, mode='bilinear', align_corners=False) #[16, 21, 128, 128]
-	
+	unary = torch.scatter(unary,1,seg_pred[None,None,:,:],1)[0,:21]	
 	return unary
-
-def make_seg_unary_bak(seg_output,label,args, mask=None, orig_size=None):
-	# 0. detach off
-	seg_output = seg_output.detach()
-	# 1. upsample
-	w,h = seg_output.shape[-2:]
-	strided_size = (w*4,h*4)
-	if orig_size is not None:
-		strided_size = imutils.get_strided_size(orig_size, 4)
-	seg_output = F.interpolate(seg_output, strided_size, mode='bilinear', align_corners=False) #[16, 21, 128, 128]
-	if mask is not None:
-		mask = mask.detach()
-		mask = F.interpolate(mask, strided_size, mode='bilinear', align_corners=False) #[16, 21, 128, 128]
-
-	norm_seg = seg_output / F.adaptive_max_pool2d(seg_output, (1, 1)) + 1e-5
-	norm_seg = norm_seg * label[:,1:,None,None]
-	fg = norm_seg
-	# crf fg_conf
-	# crf bg_conf
-	fg_conf = F.pad(fg, (0, 0, 0, 0, 0, 1, 0, 0), mode='constant',value=args.unary_fg_thres)
-	bg_conf = F.pad(fg, (0, 0, 0, 0, 0, 1, 0, 0), mode='constant',value=args.unary_bg_thres)
-	
-	max_mask = fg_conf.data.new(fg_conf.shape).fill_(0.)
-	fg_conf_pane = torch.argmax(fg_conf, dim=1).unsqueeze(1)
-	max_mask = torch.scatter(max_mask,dim=1,index=fg_conf_pane,value=1.)
-	fg_conf = fg_conf*max_mask
-
-	max_mask = bg_conf.data.new(bg_conf.shape).fill_(0.)
-	bg_conf_pane = torch.argmax(bg_conf, dim=1).unsqueeze(1)
-	max_mask = torch.scatter(max_mask,dim=1,index=bg_conf_pane,value=1.)
-	bg_conf = bg_conf*max_mask
-	bg_conf[:,-1:] = bg_conf[:,-1:]/args.conf_bg_thres#*0.7
-	# combine two confs.
-	clsbd_label = torch.cat((bg_conf[:,-1:],fg_conf[:,:-1]),dim=1)
-	clsbd_label[clsbd_label>0] = 1.
-	return clsbd_label, mask
 
 def _label_to_tensor(label):
 	label[label==255.] = 21
@@ -742,16 +533,8 @@ def _clsbd_label_infer_worker(process_id, model, clsbd, dataset, args, label_out
 			seg_output = model.base.forwardMSF(pack['img']) #(orig_img)#
 			unary_1, _ = make_seg_unary(seg_output,label,args,orig_size=orig_img_size)
 			
-			# pack['img'] for clsbd forward
-			# smaller kernel
-			# clsbd.usecrf(2)
-			# rw, hms = clsbd.forwardMSF(pack['img'],unary,num_iter=120) #(orig_img,unary,num_iter=50)#
-			# clsbd.usecrf(1)
 			rw, hms = clsbd.forwardMSF(pack['img'],unary_1,num_iter=100) #(orig_img,unary,num_iter=50)#
-			# import pdb;pdb.set_trace()
 			rw_up = F.interpolate(rw, scale_factor=4, mode='bilinear', align_corners=False)[0, :, :orig_img_size[0], :orig_img_size[1]]
-			unary = make_seg_unary_from_file(img_name,orig_size=orig_img_size)
-			unary_up = unary[0]#F.interpolate(unary, scale_factor=4, mode='bilinear', align_corners=False)[0, :, :orig_img_size[0], :orig_img_size[1]]
 			
 			rw_max = torch.argmax(rw_up,dim=0)
 			rw_up[rw_up<0.8] = 0
@@ -759,6 +542,8 @@ def _clsbd_label_infer_worker(process_id, model, clsbd, dataset, args, label_out
 			rw_max[mask==0] = 0
 			rw_bit = rw_up.data.new(rw_up.shape).fill_(0)
 			rw_bit = torch.scatter(rw_bit,0,rw_max[None,:,:],1)
+
+			unary_up = make_seg_unary_from_file(img_name,orig_size=orig_img_size)
 			unary_max = torch.argmax(unary_up,dim=0)
 			unary_bit = unary_up.data.new(unary_up.shape).fill_(0)
 			unary_bit = torch.scatter(unary_bit,0,unary_max[None,:,:],1)
@@ -797,10 +582,10 @@ def clsbd_validate(model, clsbd, args, ep):
 	else:
 		print('Validate: 1. Making crf inference labels...')
 		n_gpus = torch.cuda.device_count()
-		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.infer_list,
+		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.train_list,
 																voc12_root=args.voc12_root, scales=args.cam_scales)
 		dataset = torchutils.split_dataset(dataset, n_gpus)
-		label_out_dir = args.valid_clsbd_out_dir#args.sem_seg_out_dir+str(ep)
+		label_out_dir = args.sem_seg_out_dir+str(ep) #args.valid_clsbd_out_dir#
 		os.makedirs(label_out_dir, exist_ok=True)
 		multiprocessing.spawn(_clsbd_label_infer_worker, nprocs=n_gpus, args=(model, clsbd, dataset, args, label_out_dir), join=True)
 
