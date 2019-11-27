@@ -492,7 +492,7 @@ def make_seg_unary(seg_output,label,args, mask=None, orig_size=None):
 	return fg, mask
 
 def make_seg_unary_from_file(img_name, ir_label_dir, orig_size=None):
-	import pdb;pdb.set_trace()
+	# import pdb;pdb.set_trace()
 	seg_pred = torch.from_numpy(imageio.imread(os.path.join(ir_label_dir ,img_name+'.png'))).type(torch.LongTensor).cuda()
 	seg_pred[seg_pred==255] = 21
 	seg_pred = seg_pred.type(torch.LongTensor).cuda()
@@ -625,6 +625,7 @@ def clsbd_validate(model, clsbd, args, ep):
 		label_out_dir = args.valid_clsbd_out_dir#args.sem_seg_out_dir+str(ep) #args.valid_clsbd_out_dir#
 		os.makedirs(label_out_dir, exist_ok=True)
 		ir_label_dir = args.ir_label_out_dir + str(ep-1)
+		clsbd.convcrf.CRF.bgreduce = (ep-5)/2.*0.05+0.8
 		multiprocessing.spawn(_clsbd_label_infer_worker, nprocs=n_gpus, args=(model, clsbd, dataset, args, label_out_dir, ir_label_dir, (ep==5)), join=True)
 
 		torch.cuda.empty_cache()
@@ -632,5 +633,5 @@ def clsbd_validate(model, clsbd, args, ep):
 		print('Validate: 2. Eval labels...')
 		# step 2: eval results
 		miou = eval_metrics('train', label_out_dir, args)
-		# exit(0)
+		exit(0)
 		return None#miou
