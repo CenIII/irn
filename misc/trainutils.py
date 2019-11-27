@@ -496,7 +496,7 @@ def _clsbd_validate_infer_worker(process_id, model, clsbd, dataset, args):
 			# # rw_pred[mask==0] = 21
 			# rw_pred = rw_pred.cpu().numpy()
 			# imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '.png'), rw_pred.astype(np.uint8))
-			# imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_light.png'), (rw_pred*10).astype(np.uint8))
+			imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_light.png'), (rw_pred*10).astype(np.uint8))
 			# imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_clsbd.png'), (255*hms[-1][0,...,0].cpu().numpy()).astype(np.uint8))
 
 def clsbd_validate(model, clsbd, args):
