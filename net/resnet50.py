@@ -4,7 +4,8 @@ import torch.utils.model_zoo as model_zoo
 
 
 model_urls = {
-    'resnet50': 'https://download.pytorch.org/models/resnet50-19c8e357.pth'
+    'resnet50': 'https://download.pytorch.org/models/resnet50-19c8e357.pth',
+    'resnet101': 'https://download.pytorch.org/models/resnet101-5d3b4d8f.pth'
 }
 
 
@@ -117,9 +118,23 @@ def resnet50(pretrained=True, **kwargs):
         state_dict.pop('fc.bias')
         model.load_state_dict(state_dict)
     return model
+def resnet101(pretrained=True, **kwargs):
 
+    model = ResNet(Bottleneck, [3, 4, 23, 3], **kwargs)
+    if pretrained:
+        state_dict = model_zoo.load_url(model_urls['resnet101'])
+        state_dict.pop('fc.weight')
+        state_dict.pop('fc.bias')
+        model.load_state_dict(state_dict)
+    return model
 def get_resnet50_state_dict():
     state_dict = model_zoo.load_url(model_urls['resnet50'])
+    state_dict.pop('fc.weight')
+    state_dict.pop('fc.bias')
+    return state_dict
+
+def get_resnet101_state_dict():
+    state_dict = model_zoo.load_url(model_urls['resnet101'])
     state_dict.pop('fc.weight')
     state_dict.pop('fc.bias')
     return state_dict

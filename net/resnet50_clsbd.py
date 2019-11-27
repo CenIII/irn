@@ -134,7 +134,7 @@ class Net(nn.Module):
         super(Net, self).__init__()
         # self.cam_net = cam_net
         # backbone
-        self.resnet50 = resnet50.resnet50(pretrained=True, strides=[2, 2, 2, 1])
+        self.resnet50 = resnet50.resnet101(pretrained=True, strides=[2, 2, 2, 1])
 
         self.stage1 = nn.Sequential(self.resnet50.conv1, self.resnet50.bn1, self.resnet50.relu, self.resnet50.maxpool)
         self.stage2 = nn.Sequential(self.resnet50.layer1)

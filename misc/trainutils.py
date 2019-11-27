@@ -522,12 +522,15 @@ def clsbd_alternate_train(train_data_loader, clsbd, optimizer, avg_meter, timer,
 		label = pack['label'].cuda(non_blocking=True)  # [16, 21]
 		seg_label = pack['seg_label'].cuda(non_blocking=True)
 		mask = pack['mask'].cuda(non_blocking=True)  # [16, 21]
-		loss_pack, hms = clsbd(img, _label_to_tensor(seg_label), mask=mask)
-		if (optimizer.global_step-1)%20 == 0 and args.cam_visualize_train:
-			visualize(img, clsbd.module, hms, label, cb, optimizer.global_step-1, img_denorm, args.vis_out_dir_clsbd)
-			visualize_all_classes(hms, label, optimizer.global_step-1, args.vis_out_dir_clsbd, origin=0, descr='unary')
 
-		loss = compute_clsbd_loss(loss_pack)
+		loss = 0.
+		for i in range(2):
+			loss_pack, hms = clsbd(img[8*i:8*(i+1)], _label_to_tensor(seg_label[8*i:8*(i+1)]), mask=mask[8*i:8*(i+1)])
+			if (optimizer.global_step-1)%20 == 0 and args.cam_visualize_train and i==0:
+				visualize(img, clsbd.module, hms, label[8*i:8*(i+1)], cb, optimizer.global_step-1, img_denorm, args.vis_out_dir_clsbd)
+				visualize_all_classes(hms, label[8*i:8*(i+1)], optimizer.global_step-1, args.vis_out_dir_clsbd, origin=0, descr='unary')
+
+			loss = loss + compute_clsbd_loss(loss_pack)/2.
 
 		avg_meter.add({'loss1': loss.item()})
 		optimizer.zero_grad()
