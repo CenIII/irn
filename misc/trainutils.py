@@ -619,10 +619,10 @@ def clsbd_validate(model, clsbd, args, ep):
 	else:
 		print('Validate: 1. Making crf inference labels...')
 		n_gpus = torch.cuda.device_count()
-		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.infer_list,
+		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.train_list,
 																voc12_root=args.voc12_root, scales=args.cam_scales)
 		dataset = torchutils.split_dataset(dataset, n_gpus)
-		label_out_dir = args.valid_clsbd_out_dir#args.sem_seg_out_dir+str(ep) #args.valid_clsbd_out_dir#
+		label_out_dir = args.sem_seg_out_dir+str(ep) #args.valid_clsbd_out_dir#
 		os.makedirs(label_out_dir, exist_ok=True)
 		ir_label_dir = args.ir_label_out_dir + str(ep-1)
 		clsbd.convcrf.CRF.bgreduce = (ep-5)/2.*0.05+0.8
