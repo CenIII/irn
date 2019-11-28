@@ -193,7 +193,7 @@ def run(args):
 			# # # model = reload_res50(model)
 			# model.load_state_dict(torch.load('exp/deeplabv2_cam21_meansig/sess/res50_cam_6_637.pth'), strict=False)
 			clsbd = getattr(importlib.import_module(args.irn_network), 'Net')()
-			# clsbd.load_state_dict(torch.load('exp/deeplabv2_cam21_meansig/sess/res50_clsbd_5.pth'), strict=False)
+			# clsbd.load_state_dict(torch.load('exp/deeplabv2_res101/sess/res50_clsbd_5.pth'), strict=False)
 
 			clsbd_optimizer = get_clsbd_optimizer(clsbd, args, 3*max_step)
 			is_max_step = False
@@ -203,6 +203,6 @@ def run(args):
 			# import pdb;pdb.set_trace()
 			model_in = model_init if ep==5 else model
 			# import pdb;pdb.set_trace()
-			clsbd_validate(model_in, clsbd, args, ep)
+			clsbd_validate(model_in, clsbd, args, ep, logger)
 
 	torch.cuda.empty_cache()

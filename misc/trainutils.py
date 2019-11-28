@@ -203,27 +203,32 @@ def model_alternate_train(train_data_loader, model, scheduler, avg_meter, timer,
 	for step, pack in enumerate(train_data_loader):
 
 		scheduler.optimizer.zero_grad()
-
-		loss = 0
-		for i in range(1):
-			img = pack['img'].cuda()  # ([16, 3, 512, 512])#[i*10:(i+1)*10]
-			label = pack['label'].cuda(non_blocking=True)  # [16, 21]
+		pack_img = pack['img'].cuda()
+		pack_label = pack['label'].cuda(non_blocking=True)
+		pack_seg_label = pack['seg_label'].cuda(non_blocking=True)
+		loss = 0.
+		st = [0,8]
+		ed = [8,16]
+		for i in range(2):
+			img =  pack_img[st[i]:ed[i]] # ([16, 3, 512, 512])#[i*10:(i+1)*10]
+			label = pack_label[st[i]:ed[i]]  # [16, 21]
 			# mask = pack['mask'].cuda(non_blocking=True)  # [16, 21]
-			seg_label = pack['seg_label'].cuda(non_blocking=True)  # [16, 21]
+			seg_label = pack_seg_label[st[i]:ed[i]]  # [16, 21]
 			# import pdb;pdb.set_trace()
 			# 1. forward pass model
-			logits = model(img)
+			with torch.autograd.set_detect_anomaly(True):
+				logits = model(img)
 
-			iter_loss = 0
-			for logit in logits:
-				# Resize labels for {100%, 75%, 50%, Max} logits
-				_, _, H, W = logit.shape
-				labels_ = resize_labels(seg_label, size=(H, W))
-				iter_loss += criterion(logit, labels_.cuda())
+				iter_loss = 0
+				for logit in logits:
+					# Resize labels for {100%, 75%, 50%, Max} logits
+					_, _, H, W = logit.shape
+					labels_ = resize_labels(seg_label, size=(H, W))
+					iter_loss += criterion(logit, labels_.cuda())
 
-			# Propagate backward (just compute gradients wrt the loss)
-			# iter_loss /= 2.
-			iter_loss.backward()
+				# Propagate backward (just compute gradients wrt the loss)
+				iter_loss *= (ed[i]-st[i])/16.
+				iter_loss.backward()
 
 			# loss = compute_seg_loss(crit, seg_output, seg_label)
 			loss += float(iter_loss)
@@ -603,7 +608,7 @@ def _clsbd_label_infer_worker(process_id, model, clsbd, dataset, args, label_out
 			imageio.imsave(os.path.join(label_out_dir, img_name + '_light.png'), (rw_pred*10).astype(np.uint8))
 			# imageio.imsave(os.path.join(label_out_dir, img_name + '_clsbd.png'), (255*hms[-2][0,...,0].cpu().numpy()).astype(np.uint8))
 
-def clsbd_validate(model, clsbd, args, ep):
+def clsbd_validate(model, clsbd, args, ep, logger=None):
 	# 分两步，第一步multiprocess infer结果并保存到validate/clsbd/epoch#
 	# 第二步参考eval_cam.py, 从文件夹读取结果并单线程eval结果
 	model.eval()
@@ -623,10 +628,10 @@ def clsbd_validate(model, clsbd, args, ep):
 	else:
 		print('Validate: 1. Making crf inference labels...')
 		n_gpus = torch.cuda.device_count()
-		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.infer_list,
+		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.train_list,
 																voc12_root=args.voc12_root, scales=args.cam_scales)
 		dataset = torchutils.split_dataset(dataset, n_gpus)
-		label_out_dir = args.valid_clsbd_out_dir#args.sem_seg_out_dir+str(ep) #args.valid_clsbd_out_dir#
+		label_out_dir = args.sem_seg_out_dir+str(ep) #args.valid_clsbd_out_dir#
 		os.makedirs(label_out_dir, exist_ok=True)
 		ir_label_dir = args.ir_label_out_dir + str(ep-1)
 		clsbd.convcrf.CRF.bgreduce = (ep-5)/2.*0.05+0.8
@@ -636,7 +641,7 @@ def clsbd_validate(model, clsbd, args, ep):
 		
 		print('Validate: 2. Eval labels...')
 		# step 2: eval results
-		miou = eval_metrics('train', label_out_dir, args)
+		miou = eval_metrics('train', label_out_dir, args, logger=logger)
 		torch.cuda.empty_cache()
 		exit(0)
 		return None#miou
