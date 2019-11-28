@@ -16,7 +16,7 @@ def join_path(args):
     args.valid_out_dir = os.path.join(args.exp_root, args.valid_out_dir)
     args.valid_clsbd_out_dir = os.path.join(args.exp_root, args.valid_clsbd_out_dir)
     args.valid_model_out_dir = os.path.join(args.exp_root, args.valid_model_out_dir)
-
+    args.test_out_dir = os.path.join(args.exp_root, args.test_out_dir)
     args.ir_label_out_dir = os.path.join(args.exp_root, args.ir_label_out_dir)
     # args.unary_out_dir = os.path.join(args.exp_root, args.unary_out_dir)
     args.sem_seg_out_dir = os.path.join(args.exp_root, args.sem_seg_out_dir)
@@ -53,6 +53,7 @@ if __name__ == '__main__':
     # Dataset
     parser.add_argument("--train_list", default="voc12/train_aug.txt", type=str)
     parser.add_argument("--val_list", default="voc12/val.txt", type=str)
+    parser.add_argument("--test_list", default="voc12/test.txt", type=str)
     parser.add_argument("--infer_list", default="voc12/train.txt", type=str)
     parser.add_argument("--chainer_eval_set", default="train", type=str)
     parser.add_argument("--quick_list", default="voc12/quick.txt", type=str)
@@ -109,6 +110,7 @@ if __name__ == '__main__':
     parser.add_argument("--valid_clsbd_out_dir", default="result/validate/clsbd", type=str)
     parser.add_argument("--valid_model_out_dir", default="result/validate/model", type=str)
     
+    parser.add_argument("--test_out_dir", default="result/result/VOC2012/Segmentation/comp5_test_cls", type=str)
 
     parser.add_argument("--unary_out_dir", default="result/unary", type=str)
     parser.add_argument("--ir_label_out_dir", default="result/ir_label", type=str)

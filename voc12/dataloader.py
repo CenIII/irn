@@ -166,14 +166,14 @@ class VOC12ClassificationDataset(VOC12ImageDataset):
         super().__init__(img_name_list_path, voc12_root,
                  resize_long, rescale, img_normal, hor_flip,
                  crop_size, crop_method)
-        self.label_list = load_image_label_list_from_npy(self.img_name_list)
-        bg_labels = np.ones((self.label_list.shape[0],1)).astype(np.float)
-        self.label_list = np.concatenate((bg_labels,self.label_list), axis=1).astype(np.float)
+        # self.label_list = load_image_label_list_from_npy(self.img_name_list)
+        # bg_labels = np.ones((self.label_list.shape[0],1)).astype(np.float)
+        # self.label_list = np.concatenate((bg_labels,self.label_list), axis=1).astype(np.float)
 
     def __getitem__(self, idx):
         out = super().__getitem__(idx)
 
-        out['label'] = torch.from_numpy(self.label_list[idx]).type(torch.FloatTensor)
+        # out['label'] = torch.from_numpy(self.label_list[idx]).type(torch.FloatTensor)
 
         return out
 
@@ -321,8 +321,8 @@ class VOC12ClassificationDatasetMSF(VOC12ClassificationDataset):
         
         orig_img = imutils.HWC_to_CHW(self.img_normal(orig_img))
 
-        out = {"name": name_str, "img": ms_img_list, "orig_img":orig_img, "size": (img.shape[0], img.shape[1]),
-               "label": torch.from_numpy(self.label_list[idx]).type(torch.FloatTensor)}
+        out = {"name": name_str, "img": ms_img_list, "orig_img":orig_img, "size": (img.shape[0], img.shape[1])}#,
+            #    "label": torch.from_numpy(self.label_list[idx]).type(torch.FloatTensor)}
         return out
 
 class VOC12ClassificationDatasetMSF_Clsbd(VOC12ClassificationDataset):

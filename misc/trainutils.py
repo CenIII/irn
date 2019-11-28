@@ -249,7 +249,7 @@ def model_alternate_train(train_data_loader, model, scheduler, avg_meter, timer,
 	torch.cuda.empty_cache()
 	return model.module, scheduler.is_max_step()
 
-def _seg_validate_infer_worker(process_id, model, dataset, args, use_crf=False):
+def _seg_validate_infer_worker(process_id, model, dataset, args, out_dir, use_crf=True):
 	databin = dataset[process_id]
 	n_gpus = torch.cuda.device_count()
 	data_loader = DataLoader(databin, batch_size=1, shuffle=False, num_workers=args.num_workers // n_gpus, pin_memory=False)
@@ -260,7 +260,7 @@ def _seg_validate_infer_worker(process_id, model, dataset, args, use_crf=False):
 		for iter, pack in qdar:
 			img_name = voc12.dataloader.decode_int_filename(pack['name'][0])
 			orig_img_size = np.asarray(pack['size'])
-			label = pack['label'].cuda(non_blocking=True)
+			# label = pack['label'].cuda(non_blocking=True)
 			for k in range(len(pack['img'])):
 				pack['img'][k] = pack['img'][k].cuda(non_blocking=True)
 			seg_output = model.base.forwardMSF(pack['img']) #(orig_img)#
@@ -271,7 +271,7 @@ def _seg_validate_infer_worker(process_id, model, dataset, args, use_crf=False):
 			if use_crf:
 				img = np.asarray(imageio.imread(voc12.dataloader.get_img_path(img_name, args.voc12_root)))
 				rw_pred = imutils.crf_inference_label(img, rw_pred, n_labels=21)
-			imageio.imsave(os.path.join(args.valid_model_out_dir, img_name + '.png'), rw_pred.astype(np.uint8))
+			imageio.imsave(os.path.join(out_dir, img_name + '.png'), rw_pred.astype(np.uint8))
 			# imageio.imsave(os.path.join(args.valid_model_out_dir, img_name + '_light.png'), (rw_pred*10).astype(np.uint8))
 			# imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_clsbd.png'), (255*hms[-1][0,...,0].cpu().numpy()).astype(np.uint8))
 
@@ -381,7 +381,7 @@ def _seg_label_infer_worker(process_id, model, dataset, args, label_out_dir, use
 			# imageio.imsave(os.path.join(args.valid_clsbd_out_dir, img_name + '_clsbd.png'), (255*hms[-1][0,...,0].cpu().numpy()).astype(np.uint8))
 
 
-def model_validate(model, args, ep, logger, make_label=False):
+def model_validate(model, args, ep, logger, make_label=False, make_test=False):
 	# import pdb;pdb.set_trace()
 	# 分两步，第一步multiprocess infer结果并保存到validate/model/epoch#
 	# 第二步参考eval_cam.py, 从文件夹读取结果并单线程eval结果
@@ -391,13 +391,23 @@ def model_validate(model, args, ep, logger, make_label=False):
 		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.quick_list,
 																voc12_root=args.voc12_root, scales=args.cam_scales)
 		dataset = torchutils.split_dataset(dataset, 1)
-
-		_seg_validate_infer_worker(0, model, dataset, args)
+		out_dir = args.valid_model_out_dir
+		_seg_validate_infer_worker(0, model, dataset, args, out_dir)
 
 		torch.cuda.empty_cache()
 		exit(0)
 	else:
-		if make_label:
+		if make_test:
+			print('Validate: 2. Making seg preds for val set...')
+			n_gpus = torch.cuda.device_count()
+			dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.test_list,
+																	voc12_root=args.voc12_root, scales=args.cam_scales)
+			dataset = torchutils.split_dataset(dataset, n_gpus)
+			out_dir = args.test_out_dir
+			multiprocessing.spawn(_seg_validate_infer_worker, nprocs=n_gpus, args=(model, dataset, args, out_dir), join=True)
+
+			torch.cuda.empty_cache()
+		elif make_label:
 			print('Validate: 1. Making seg label for clsbd...')
 			n_gpus = torch.cuda.device_count()
 			dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.train_list,
@@ -415,8 +425,8 @@ def model_validate(model, args, ep, logger, make_label=False):
 			dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.val_list,
 																	voc12_root=args.voc12_root, scales=args.cam_scales)
 			dataset = torchutils.split_dataset(dataset, n_gpus)
-
-			multiprocessing.spawn(_seg_validate_infer_worker, nprocs=n_gpus, args=(model, dataset, args), join=True)
+			out_dir = args.valid_model_out_dir
+			multiprocessing.spawn(_seg_validate_infer_worker, nprocs=n_gpus, args=(model, dataset, args, out_dir), join=True)
 			# _seg_validate_infer_worker(0,model, dataset, args)
 			torch.cuda.empty_cache()
 			print('Validate: 3. Eval preds...')
