@@ -14,6 +14,7 @@ class PolynomialLR(_LRScheduler):
 		self.iter_max = iter_max
 		self.power = power
 		super(PolynomialLR, self).__init__(optimizer, last_epoch)
+		self.start_step = self.last_epoch
 
 	def polynomial_decay(self, lr):
 		return lr * (1 - float(self.last_epoch) / self.iter_max) ** self.power
@@ -21,6 +22,8 @@ class PolynomialLR(_LRScheduler):
 	def is_max_step(self):
 		return (self.iter_max - self.last_epoch) < 5
 	
+	def set_start_step(self,step):
+		self.start_step = step
 	def get_lr(self):
 		if (
 			(self.last_epoch == 0)

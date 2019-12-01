@@ -239,7 +239,7 @@ def model_alternate_train(train_data_loader, model, scheduler, avg_meter, timer,
 		scheduler.step()
 
 		if (scheduler.last_epoch-1)%100 == 0:
-			timer.update_progress(scheduler.last_epoch / scheduler.iter_max)
+			timer.update_progress((scheduler.last_epoch - scheduler.start_step) / (scheduler.iter_max - scheduler.start_step))
 			to_write = 'step:%5d/%5d' % (scheduler.last_epoch - 1, scheduler.iter_max) + \
 					' loss:%.4f' % (avg_meter.pop('loss1')) + \
 					' imps:%.1f' % ((step + 1) * args.cam_batch_size / timer.get_stage_elapsed()) + \
@@ -254,7 +254,7 @@ def model_alternate_train(train_data_loader, model, scheduler, avg_meter, timer,
 	torch.cuda.empty_cache()
 	return model.module, scheduler.is_max_step()
 
-def _seg_validate_infer_worker(process_id, model, dataset, args, use_crf=False):
+def _seg_validate_infer_worker(process_id, model, dataset, args, use_crf=True):
 	databin = dataset[process_id]
 	n_gpus = torch.cuda.device_count()
 	data_loader = DataLoader(databin, batch_size=1, shuffle=False, num_workers=args.num_workers // n_gpus, pin_memory=False)
@@ -405,7 +405,7 @@ def model_validate(model, args, ep, logger, make_label=False):
 		if make_label:
 			print('Validate: 1. Making seg label for clsbd...')
 			n_gpus = torch.cuda.device_count()
-			dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.train_list,
+			dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.infer_list,
 																	voc12_root=args.voc12_root, scales=args.cam_scales)
 			dataset = torchutils.split_dataset(dataset, n_gpus)
 			label_out_dir = args.ir_label_out_dir+str(ep)
@@ -628,13 +628,13 @@ def clsbd_validate(model, clsbd, args, ep, logger=None):
 	else:
 		print('Validate: 1. Making crf inference labels...')
 		n_gpus = torch.cuda.device_count()
-		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.train_list,
+		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.infer_list,
 																voc12_root=args.voc12_root, scales=args.cam_scales)
 		dataset = torchutils.split_dataset(dataset, n_gpus)
-		label_out_dir = args.sem_seg_out_dir+str(ep) #args.valid_clsbd_out_dir#
+		label_out_dir = args.valid_clsbd_out_dir#args.sem_seg_out_dir+str(ep) #
 		os.makedirs(label_out_dir, exist_ok=True)
 		ir_label_dir = args.ir_label_out_dir + str(ep-1)
-		clsbd.convcrf.CRF.bgreduce = (ep-5)/2.*0.05+0.8
+		# clsbd.convcrf.CRF.bgreduce = (ep-5)/2.*0.2+0.8
 		multiprocessing.spawn(_clsbd_label_infer_worker, nprocs=n_gpus, args=(model, clsbd, dataset, args, label_out_dir, ir_label_dir, (ep==5)), join=True)
 
 		torch.cuda.empty_cache()

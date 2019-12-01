@@ -685,10 +685,10 @@ class ConvCRF(nn.Module):
 
 		norm = False
 		for i in range(num_iter):
-			if not self.training:
-				prediction[:,0] *= self.bgreduce
-				# import pdb;pdb.set_trace()
-				prediction[:,1:] = (prediction[:,1:]+1e-5)*(1 - prediction[:,0:1])/(prediction[:,1:]+1e-5).sum(dim=1, keepdim=True)
+			# if not self.training:
+			# 	prediction[:,0] *= self.bgreduce
+			# 	# import pdb;pdb.set_trace()
+			# 	prediction[:,1:] = (prediction[:,1:]+1e-5)*(1 - prediction[:,0:1])/(prediction[:,1:]+1e-5).sum(dim=1, keepdim=True)
 			# prediction /= prediction.sum(dim=1, keepdim=True)
 			# △ 1 Message passing
 			# prediction = prediction * (1-clsbd)
