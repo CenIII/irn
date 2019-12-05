@@ -41,14 +41,14 @@ default_conf = {
 }
 
 infer_conf = {
-    'filter_size': 9,
+    'filter_size': 11,
     'blur': 2,
     'merge': False,
     'norm': 'none',
     'weight': 'vector',
     "unary_weight": 1.,
     "weight_init": 1.,
-    "pos_weight":1.,
+    "pos_weight":15.,
     "neg_weight":1.,
 
     'trainable': False,
@@ -58,8 +58,8 @@ infer_conf = {
     'final_softmax': False,
 
     'pos_feats': {
-        'sdims': 50,
-        'compat': 0.,
+        'sdims': 100,
+        'compat': 1.,
     },
     'col_feats': {
         # 'sdims': 80,
@@ -220,7 +220,7 @@ class Net(nn.Module):
         clsbd = clsbd[...,:unary.shape[-2],:unary.shape[-1]]
         # if not self.training:
         #     clsbd = self.sobel.thin_edge(clsbd)
-        pred = self.convcrf(unary, clsbd, num_iter=num_iter, mask=mask)
+        pred = self.convcrf(unary, clsbd, num_iter=num_iter)#, mask=mask)
         hms = [unary,clsbd.repeat(1,21,1,1)]
         if not self.training:
             hms.append(pred)
@@ -241,7 +241,7 @@ class Net(nn.Module):
         clsbd = torch.mean(torch.stack(
             [torch.sigmoid(F.interpolate(o, std_size, mode='bilinear', align_corners=False)) for o
                 in clsbd_list]), 0)
-        pred, hms = self.infer_crf(clsbd, unary, num_iter=num_iter, mask=mask)
+        pred, hms = self.infer_crf(clsbd, unary, num_iter=num_iter)#, mask=mask)
         return pred, hms
 
     def getHeatmaps(self, hms, classid):
