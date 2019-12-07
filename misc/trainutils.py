@@ -562,6 +562,10 @@ def make_seg_output_from_cam(img_name,args,orig_size):
 	seg_out = torch.zeros((21,*cams.shape[1:])).cuda()
 	seg_out = torch.scatter(seg_out,0,cls_labels[None,:,:],label_vals[None,:,:]) #label_vals[None,:,:]
 	seg_out[0] /= args.cam_eval_thres
+	# import pdb;pdb.set_trace()
+	zzz=seg_out.max(dim=0,keepdim=True)[0]
+	zzz=(1-zzz)/21.
+	seg_out = seg_out + zzz
 	seg_out = seg_out.unsqueeze(0)
 	return seg_out
 

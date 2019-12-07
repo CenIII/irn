@@ -1386,8 +1386,8 @@ class ConvCRF(nn.Module):
 			
 			if not self.training:
 				prediction[:,0] *= 0.88
-				if i>0:
-					prediction[:,1:] = (prediction[:,1:]+1e-5)*(1 - prediction[:,0:1])/(prediction[:,1:]+1e-5).sum(dim=1, keepdim=True)
+				# if i>0:
+				prediction[:,1:] = (prediction[:,1:]+1e-5)*(1 - prediction[:,0:1])/(prediction[:,1:]+1e-5).sum(dim=1, keepdim=True)
 			# △ 1 Message passing
 			messages, input_col, pl = self.kernel.compute(prediction, None)
 			_,C,K,_,W,H = input_col.shape

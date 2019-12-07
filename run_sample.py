@@ -65,7 +65,7 @@ if __name__ == '__main__':
     parser.add_argument("--cam_start_epoch", default=5, type=int)
     parser.add_argument("--cam_learning_rate", required=True, type=float)
     parser.add_argument("--cam_weight_decay", default=1e-4, type=float)
-    parser.add_argument("--cam_eval_thres", default=0.1, type=float)
+    parser.add_argument("--cam_eval_thres", default=0.08, type=float)
     parser.add_argument("--cam_scales", default=(1.0,0.5,1.5))# 0.5, 1.5, 2.0)) # NOTE: 1.0 must be the first as network will take 1st as standard img size.
     parser.add_argument("--cam_visualize_train", default=False)
     parser.add_argument("--cam_preload", default=False)
