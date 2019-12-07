@@ -41,14 +41,14 @@ default_conf = {
 }
 
 infer_conf = {
-    'filter_size': 9,
-    'blur': 2,
+    'filter_size': 19,
+    'blur': 1,
     'merge': False,
     'norm': 'none',
     'weight': 'vector',
     "unary_weight": 1.,
     "weight_init": 1.,
-    "pos_weight":15.,
+    "pos_weight":1.,
     "neg_weight":1.,
 
     'trainable': False,
@@ -59,7 +59,7 @@ infer_conf = {
 
     'pos_feats': {
         'sdims': 100,
-        'compat': 1.,
+        'compat': 0.,
     },
     'col_feats': {
         # 'sdims': 80,
