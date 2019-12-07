@@ -559,9 +559,15 @@ def make_seg_output_from_cam(img_name,args,orig_size):
 	cls_labels = np.argmax(cams, axis=0)
 	cls_labels = torch.from_numpy(keys[cls_labels]).cuda()
 	label_vals = torch.from_numpy(np.max(cams, axis=0)).cuda()
+	# import pdb;pdb.set_trace()
+	bg_vals = 1 - torch.from_numpy(np.max(cams[1:], axis=0)).cuda()
+	bgmask = torch.zeros_like(bg_vals)
+	bgmask[cls_labels==0] = 1. 
+	bg_vals *= bgmask
 	seg_out = torch.zeros((21,*cams.shape[1:])).cuda()
 	seg_out = torch.scatter(seg_out,0,cls_labels[None,:,:],label_vals[None,:,:]) #label_vals[None,:,:]
-	seg_out[0] /= args.cam_eval_thres
+	# seg_out[0] /= args.cam_eval_thres
+	seg_out[0] = bg_vals
 	# import pdb;pdb.set_trace()
 	zzz=seg_out.max(dim=0,keepdim=True)[0]
 	zzz=(1-zzz)/21.

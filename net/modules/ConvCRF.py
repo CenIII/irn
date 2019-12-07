@@ -1410,7 +1410,7 @@ class ConvCRF(nn.Module):
 			pairwise = (self.pos_weight*pos_message + self.neg_weight*neg_message)
 			potential = - (self.unary_weight - self.weight) * psi_unary - self.weight * pairwise
 			prediction = F.softmax(potential, dim=1)
-			if ((prev_pred-prediction)**2).sum()<1e-3:
+			if ((prev_pred-prediction)**2).sum()<1e-4:
 				break
 			prev_pred = prediction.clone()
 		return prediction
