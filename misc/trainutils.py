@@ -505,7 +505,7 @@ def _label_to_tensor(label):
 	label[label==255.] = 21
 	label = label.unsqueeze(1)
 	N,_,W,H = label.shape
-	mask = torch.zeros(N,22,W,H).cuda()
+	mask = torch.zeros(N,22,W,H).cuda()+1./21.
 	mask = mask.scatter_(1,label.type(torch.cuda.LongTensor),1.)
 	unary = mask[:,:-1]
 	return unary
