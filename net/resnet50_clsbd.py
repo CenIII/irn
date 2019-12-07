@@ -41,7 +41,7 @@ default_conf = {
 }
 
 infer_conf = {
-    'filter_size': 11,
+    'filter_size': 9,
     'blur': 2,
     'merge': False,
     'norm': 'none',

@@ -560,7 +560,7 @@ def make_seg_output_from_cam(img_name,args,orig_size):
 	cls_labels = torch.from_numpy(keys[cls_labels]).cuda()
 	label_vals = torch.from_numpy(np.max(cams, axis=0)).cuda()
 	seg_out = torch.zeros((21,*cams.shape[1:])).cuda()
-	seg_out = torch.scatter(seg_out,0,cls_labels[None,:,:],label_vals[None,:,:])
+	seg_out = torch.scatter(seg_out,0,cls_labels[None,:,:],label_vals[None,:,:]) #label_vals[None,:,:]
 	seg_out[0] /= args.cam_eval_thres
 	seg_out = seg_out.unsqueeze(0)
 	return seg_out
@@ -600,23 +600,23 @@ def _clsbd_label_infer_worker(process_id, model, clsbd, dataset, args, label_out
 			rw_up = F.interpolate(rw, scale_factor=4, mode='bilinear', align_corners=False)[0, :, :orig_img_size[0], :orig_img_size[1]]
 			
 			rw_max = torch.argmax(rw_up,dim=0)
-			rw_up[rw_up<0.9] = 0
+			rw_up[rw_up<0.5] = 0
 			mask = rw_up.sum(dim=0)
 			rw_max[mask==0] = 0
-			rw_bit = rw_up.data.new(rw_up.shape).fill_(0)
-			rw_bit = torch.scatter(rw_bit,0,rw_max[None,:,:],1)
+			# rw_bit = rw_up.data.new(rw_up.shape).fill_(0)
+			# rw_bit = torch.scatter(rw_bit,0,rw_max[None,:,:],1)
 
-			unary_up = make_seg_unary_from_file(img_name, ir_label_dir, orig_size=orig_img_size)
-			unary_max = torch.argmax(unary_up,dim=0)
-			unary_bit = unary_up.data.new(unary_up.shape).fill_(0)
-			unary_bit = torch.scatter(unary_bit,0,unary_max[None,:,:],1)
+			# unary_up = make_seg_unary_from_file(img_name, ir_label_dir, orig_size=orig_img_size)
+			# unary_max = torch.argmax(unary_up,dim=0)
+			# unary_bit = unary_up.data.new(unary_up.shape).fill_(0)
+			# unary_bit = torch.scatter(unary_bit,0,unary_max[None,:,:],1)
 
-			mg_fg = (unary_bit + 0.5*rw_bit)[1:]
-			mask = mg_fg.sum(dim=0)
-			rw_pred = torch.argmax(mg_fg,dim=0) + 1
-			rw_pred[mask==0] = 0
+			# mg_fg = (unary_bit + 0.5*rw_bit)[1:]
+			# mask = mg_fg.sum(dim=0)
+			# rw_pred = torch.argmax(mg_fg,dim=0) + 1
+			# rw_pred[mask==0] = 0
 
-			rw_pred = rw_pred.cpu().numpy()
+			rw_pred = rw_max.cpu().numpy()
 			imageio.imsave(os.path.join(label_out_dir, img_name + '.png'), rw_pred.astype(np.uint8))
 			imageio.imsave(os.path.join(label_out_dir, img_name + '_light.png'), (rw_pred*10).astype(np.uint8))
 			# imageio.imsave(os.path.join(label_out_dir, img_name + '_clsbd.png'), (255*hms[-2][0,...,0].cpu().numpy()).astype(np.uint8))
