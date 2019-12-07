@@ -997,10 +997,8 @@ def _negative(dz):
 		return -dz
 
 def polarness(x, label): #[1, 21, 42, 63]
-	# import pdb;pdb.set_trace()
-	# keys = np.unique(label.cpu())[:-1].astype(np.int32)
-	D = x.shape[1] #len(keys) #
-	x_t = x#[:,keys]
+	D = x.shape[1]
+	x_t = x
 	# x_t /= x_t.sum(dim=1,keepdim=True)
 	entropy = (- x_t * torch.log(x_t+1e-5)).sum(dim=1,keepdim=True)
 	if D > 1:
@@ -1008,7 +1006,6 @@ def polarness(x, label): #[1, 21, 42, 63]
 	else: 
 		pl = 1. - entropy
 	pl[pl<1e-3] = 0.
-	# pl = 1. - x[:,0:1]
 	return pl 
 
 class MessagePassingCol():
@@ -1382,88 +1379,39 @@ class ConvCRF(nn.Module):
 
 	def inference(self, unary, clsbd, num_iter=3):
 		N = unary.shape[0]
-		# FIXME: unary must be logits from cam layer. psi_unary = -unary and prediction = softmax(unary)
-		# △ 0 Initialize: Q(i.e. prediction) and psi(i.e. psi_unary)
-		# import pdb;pdb.set_trace()
-		psi_unary = - F.log_softmax(unary, dim=1, _stacklevel=5) #- unary
-		# import pdb;pdb.set_trace()
-		# if self.training:
-		# 	prediction = F.softmax(unary, dim=1)
-		# 	prediction[prediction>0.5] = 1.
-		# 	prediction[prediction<=0.5] = 0.
-		# else:
-		# 	divs = torch.clamp(unary.view(21,-1).max(dim=1)[0],1.)[None,:,None,None]
-		# 	prediction = unary/divs
-		prediction = unary#F.softmax(unary, dim=1)
-		potential = - psi_unary
-		norm = False
+		psi_unary = - F.log_softmax(unary, dim=1, _stacklevel=5)
+		prediction = unary
 		prev_pred = prediction.clone()
 		for i in range(num_iter):
-			# modulate prediction
-			# import pdb;pdb.set_trace()
-			# top2 = torch.topk(potential,k=2,dim=1,largest=True)
-			# top2_diff = top2.values[:,0:1] - top2.values[:,1:2]
-			# p_mod = potential.data.new(potential.shape).fill_(0.)
-			# p_mod = torch.scatter(p_mod,dim=1,index=top2.indices[:,0:1],src=top2_diff)  # 1,21,94,125
-			# p_mod = p_mod / torch.clamp(p_mod.view(N,21,-1).max(dim=2)[0],1.)[:,:,None,None]
-			# if i<1:
-			# 	prediction = prediction * p_mod
 
 			prediction[:,0] *= 0.9
 			if i>0:
 				prediction[:,1:] = (prediction[:,1:]+1e-5)*(1 - prediction[:,0:1])/(prediction[:,1:]+1e-5).sum(dim=1, keepdim=True)
 			# △ 1 Message passing
-			# import pdb;pdb.set_trace()
 			messages, input_col, pl = self.kernel.compute(prediction, None)
 			_,C,K,_,W,H = input_col.shape
 			# △ 2 Compatibility transform
-			# mle setting
-			# message normalize over polarized points, kernel wise.
-			if norm: 
-				# import pdb;pdb.set_trace()
-				kernel_norm = torch.clamp(input_col.sum(dim=2).sum(dim=2),1.).detach()
-				pos_message = messages['pos']/kernel_norm
-				kernel_norm_neg = torch.clamp(self.neg_comp(input_col.view(N,C,-1,1)).view(input_col.shape).sum(dim=2).sum(dim=2),1.).detach()
-				# messages['neg'] = messages['neg']/kernel_norm
-				neg_message = self.neg_comp(messages['neg'])/kernel_norm_neg
-			else:
-				pos_message = messages['pos']
-				neg_message = self.neg_comp(messages['neg'])
+			pos_message = messages['pos']
+			neg_message = self.neg_comp(messages['neg'])
 				
 			# △ 3 Local Update (and normalize)
-			# import pdb;pdb.set_trace()
 			if self.training:
 				pl_pred = (prediction*pl)[:,:,None,None].detach()
 
 				pos_norm = (pl_pred*input_col).view(N,C,-1).sum(dim=2)[:,:,None,None]
 				pos_bg_sum = pos_norm[:,0].sum()
 				pos_fg_sum = pos_norm[:,1:].sum()
-				# pos_norm *= 4.
-				# pos_norm = torch.clamp(pos_norm, 1.).detach()
 				neg_input_col = self.neg_comp(input_col.view(N,C,-1,1)).view(input_col.shape)
 				neg_sum = (pl_pred*neg_input_col).sum()
-
-				# if self.weight is None:
-				#     prediction = - psi_unary - pos_message - neg_message
-				# else:
-				# import pdb;pdb.set_trace()
-				# prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * (self.pos_weight*pos_message/pos_norm + self.neg_weight*neg_message/neg_norm)
-				# prediction = (prediction*pl_pred.squeeze())#.view(N,-1).sum(dim=1)
 				return pos_message*pl_pred.squeeze(), neg_message*pl_pred.squeeze(), pos_fg_sum, pos_bg_sum, neg_sum
 			
 			pairwise = (self.pos_weight*pos_message + self.neg_weight*neg_message)
 			potential = - (self.unary_weight - self.weight) * psi_unary - self.weight * pairwise
 			prediction = F.softmax(potential, dim=1)
-			# if ((prev_pred-prediction)**2).sum()<1e-3:
-			# 	break
+			if ((prev_pred-prediction)**2).sum()<1e-3:
+				break
 			prev_pred = prediction.clone()
-			
-			# if not i == num_iter - 1 or self.final_softmax:
-			#     if self.conf['softmax']:
-			# prediction = prediction*pl_pred#F.softmax(prediction*pl_pred, dim=1)
-		# prediction = (prediction*pl_pred.squeeze())#.view(N,-1).sum(dim=1)
-		# prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * (self.pos_weight*pos_message/pos_norm + self.neg_weight*neg_message/neg_norm2)
-		return prediction#, loss
+		return prediction
 
 
 def get_test_conf():
