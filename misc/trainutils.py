@@ -604,7 +604,7 @@ def _clsbd_label_infer_worker(process_id, model, clsbd, dataset, args, label_out
 			rw_up = F.interpolate(rw, scale_factor=4, mode='bilinear', align_corners=False)[0, :, :orig_img_size[0], :orig_img_size[1]]
 			
 			rw_max = torch.argmax(rw_up,dim=0)
-			rw_up[rw_up<0.25] = 0
+			rw_up[rw_up<0.15] = 0
 			mask = rw_up.sum(dim=0)
 			rw_max[mask==0] = 0
 			# rw_bit = rw_up.data.new(rw_up.shape).fill_(0)
