@@ -151,9 +151,9 @@ def run(args):
 		print('Epoch %d/%d' % (ep+1, args.cam_num_epoches))
 		rt_key = determine_routine(ep,args)
 		if rt_key == 'model':
-			model = getattr(importlib.import_module(args.seg_network), 'DeepLabV2_ResNet50_MSC')(21)
+			model = getattr(importlib.import_module(args.seg_network), 'DeepLabV2_ResNet101_MSC')(21)
 			# model = reload_res50(model)
-			model.load_state_dict(torch.load('exp/betterinfer/sess/res50_cam_8.pth'), strict=False)
+			model.load_state_dict(torch.load('exp/betterinfer101/sess/res50_cam_8.pth'), strict=False)
 			model_optimizer = get_model_optimizer(model, args, 10*max_step)
 			best_miou = 0
 			miou = -1
@@ -173,17 +173,17 @@ def run(args):
 				model = model_new
 		elif rt_key == 'clsbd':
 			# import pdb;pdb.set_trace()
-			model = getattr(importlib.import_module(args.seg_network), 'DeepLabV2_ResNet50_MSC')(21)
-			# # model = reload_res50(model)
-			model.load_state_dict(torch.load('exp/betterinfer/sess/res50_cam_6.pth'), strict=False)
+			# model = getattr(importlib.import_module(args.seg_network), 'DeepLabV2_ResNet101_MSC')(21)
+			# # # model = reload_res50(model)
+			# model.load_state_dict(torch.load('exp/betterinfer101/sess/res50_cam_6.pth'), strict=False)
 			clsbd = getattr(importlib.import_module(args.irn_network), 'Net')()
-			clsbd.load_state_dict(torch.load('exp/betterinfer/sess/res50_clsbd_7.pth'), strict=False)
+			# clsbd.load_state_dict(torch.load('exp/betterinfer101/sess/res50_clsbd_7.pth'), strict=False)
 
-			# clsbd_optimizer = get_clsbd_optimizer(clsbd, args, 3*max_step)
-			# is_max_step = False
-			# while not is_max_step:
-			# 	clsbd, is_max_step = clsbd_alternate_train(clsbd_train_data_loader, clsbd, clsbd_optimizer, avg_meter, timer, args, ep)
-			# exit(0)
+			clsbd_optimizer = get_clsbd_optimizer(clsbd, args, 3*max_step)
+			is_max_step = False
+			while not is_max_step:
+				clsbd, is_max_step = clsbd_alternate_train(clsbd_train_data_loader, clsbd, clsbd_optimizer, avg_meter, timer, args, ep)
+			exit(0)
 			# import pdb;pdb.set_trace()
 			model_in = model_init if ep==5 else model
 			# import pdb;pdb.set_trace()
