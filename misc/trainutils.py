@@ -204,26 +204,29 @@ def model_alternate_train(train_data_loader, model, scheduler, avg_meter, timer,
 
 		scheduler.optimizer.zero_grad()
 
-		loss = 0
-		for i in range(1):
-			img = pack['img'].cuda()  # ([16, 3, 512, 512])#[i*10:(i+1)*10]
-			label = pack['label'].cuda(non_blocking=True)  # [16, 21]
+		loss = 0.
+		st = [0,8]
+		ed = [8,16]
+		for i in range(2):
+			img =  pack_img[st[i]:ed[i]] # ([16, 3, 512, 512])#[i*10:(i+1)*10]
+			label = pack_label[st[i]:ed[i]]  # [16, 21]
 			# mask = pack['mask'].cuda(non_blocking=True)  # [16, 21]
-			seg_label = pack['seg_label'].cuda(non_blocking=True)  # [16, 21]
+			seg_label = pack_seg_label[st[i]:ed[i]]  # [16, 21]
 			# import pdb;pdb.set_trace()
 			# 1. forward pass model
-			logits = model(img)
+			with torch.autograd.set_detect_anomaly(True):
+				logits = model(img)
 
-			iter_loss = 0
-			for logit in logits:
-				# Resize labels for {100%, 75%, 50%, Max} logits
-				_, _, H, W = logit.shape
-				labels_ = resize_labels(seg_label, size=(H, W))
-				iter_loss += criterion(logit, labels_.cuda())
+				iter_loss = 0
+				for logit in logits:
+					# Resize labels for {100%, 75%, 50%, Max} logits
+					_, _, H, W = logit.shape
+					labels_ = resize_labels(seg_label, size=(H, W))
+					iter_loss += criterion(logit, labels_.cuda())
 
-			# Propagate backward (just compute gradients wrt the loss)
-			# iter_loss /= 2.
-			iter_loss.backward()
+				# Propagate backward (just compute gradients wrt the loss)
+				iter_loss *= (ed[i]-st[i])/16.
+				iter_loss.backward()
 
 			# loss = compute_seg_loss(crit, seg_output, seg_label)
 			loss += float(iter_loss)
