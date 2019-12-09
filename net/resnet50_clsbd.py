@@ -220,7 +220,7 @@ class Net(nn.Module):
         clsbd = clsbd[...,:unary.shape[-2],:unary.shape[-1]]
         # if not self.training:
         #     clsbd = self.sobel.thin_edge(clsbd)
-        pred = self.convcrf(unary, clsbd, num_iter=num_iter)#, mask=mask)
+        pred = self.convcrf(unary, clsbd, num_iter=num_iter, mask=mask)
         hms = [unary,clsbd.repeat(1,21,1,1)]
         if not self.training:
             hms.append(pred)
@@ -241,7 +241,7 @@ class Net(nn.Module):
         clsbd = torch.mean(torch.stack(
             [torch.sigmoid(F.interpolate(o, std_size, mode='bilinear', align_corners=False)) for o
                 in clsbd_list]), 0)
-        pred, hms = self.infer_crf(clsbd, unary, num_iter=num_iter)#, mask=mask)
+        pred, hms = self.infer_crf(clsbd, unary, num_iter=num_iter, mask=mask)
         return pred, hms
 
     def getHeatmaps(self, hms, classid):

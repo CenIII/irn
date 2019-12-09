@@ -256,7 +256,17 @@
 # 	pl[pl<1e-3] = 0.
 # 	# pl = 1. - x[:,0:1]
 # 	return pl 
-
+# # def polarness(x): #[1, 21, 42, 63]
+# # 	D = x.shape[1]
+# # 	x_t = x
+# # 	# x_t /= x_t.sum(dim=1,keepdim=True)
+# # 	entropy = (- x_t * torch.log(x_t+1e-5)).sum(dim=1,keepdim=True)
+# # 	if D > 1:
+# # 		pl = 1. - entropy / np.log(D)
+# # 	else: 
+# # 		pl = 1. - entropy
+# # 	pl[pl<1e-3] = 0.
+# # 	return pl 
 # class MessagePassingCol():
 # 	""" Perform the Message passing of ConvCRFs.
 
@@ -675,40 +685,20 @@
 # 		# unary must be logits from cam layer. psi_unary = -unary and prediction = softmax(unary)
 # 		# △ 0 Initialize: Q(i.e. prediction) and psi(i.e. psi_unary)
 # 		psi_unary = - F.log_softmax(unary, dim=1, _stacklevel=5) #- unary
-# 		# if self.training:
-# 		# 	prediction = F.softmax(unary, dim=1)
-# 		# 	prediction[prediction>0.5] = 1.
-# 		# 	prediction[prediction<=0.5] = 0.
-# 		# else:
-# 		# 	divs = torch.clamp(unary.view(21,-1).max(dim=1)[0],1.)[None,:,None,None]
-# 		# 	prediction = unary/divs
 # 		prediction = unary
-
-# 		norm = False
+# 		prev_pred = prediction.clone()
 # 		for i in range(num_iter):
 # 			if not self.training:
-# 				prediction[:,0] *= self.bgreduce
-# 				# import pdb;pdb.set_trace()
-# 				if i>0:
-# 					prediction[:,1:] = (prediction[:,1:]+1e-5)*(1 - prediction[:,0:1])/(prediction[:,1:]+1e-5).sum(dim=1, keepdim=True)
-# 			# prediction /= prediction.sum(dim=1, keepdim=True)
+# 				prediction[:,0] *= 0.9
+# 				prediction[:,1:] = (prediction[:,1:]+1e-5)*(1 - prediction[:,0:1])/(prediction[:,1:]+1e-5).sum(dim=1, keepdim=True)
 # 			# △ 1 Message passing
 # 			# prediction = prediction * (1-clsbd)
 # 			messages, input_col, pl = self.kernel.compute(prediction)
 # 			_,C,K,_,W,H = input_col.shape
 # 			input_col = input_col*self.kernel.kp_mask
 # 			# △ 2 Compatibility transform
-# 			# mle setting
-# 			# message normalize over polarized points, kernel wise.
-# 			if norm: 
-# 				kernel_norm = torch.clamp(input_col.sum(dim=2).sum(dim=2),1.).detach()
-# 				pos_message = messages['pos']/kernel_norm
-# 				kernel_norm_neg = torch.clamp(self.neg_comp(input_col.view(N,C,-1,1)).view(input_col.shape).sum(dim=2).sum(dim=2),1.).detach()
-# 				# messages['neg'] = messages['neg']/kernel_norm
-# 				neg_message = self.neg_comp(messages['neg'])/kernel_norm_neg
-# 			else:
-# 				pos_message = messages['pos']
-# 				neg_message = self.neg_comp(messages['neg'])
+# 			pos_message = messages['pos']
+# 			neg_message = self.neg_comp(messages['neg'])
 				
 # 			# △ 3 Local Update (and normalize)
 # 			if self.training:
@@ -727,13 +717,11 @@
 # 			prediction = F.softmax(prediction, dim=1)
 # 			if mask is not None:
 # 				prediction = prediction * mask
+# 			if ((prev_pred-prediction)**2).sum()<1e-4:
+# 				break
+# 			prev_pred = prediction.clone()
 
-# 			# if not i == num_iter - 1 or self.final_softmax:
-# 			#     if self.conf['softmax']:
-# 			# prediction = prediction*pl_pred#F.softmax(prediction*pl_pred, dim=1)
-# 		# prediction = (prediction*pl_pred.squeeze())#.view(N,-1).sum(dim=1)
-# 		# prediction = - (self.unary_weight - self.weight) * psi_unary - self.weight * (self.pos_weight*pos_message/pos_norm + self.neg_weight*neg_message/neg_norm2)
-# 		return prediction#, loss
+# 		return prediction
 
 
 # def get_test_conf():
@@ -743,25 +731,27 @@
 # def get_default_conf():
 # 	return default_conf.copy()
 
-# # if __name__ == "__main__":
-# #     conf = get_test_conf()
-# #     tcrf = GaussCRF(conf, [10, 10], None).cuda()
+# if __name__ == "__main__":
+#     conf = get_test_conf()
+#     tcrf = GaussCRF(conf, [10, 10], None).cuda()
 
-# #     unary = test_utils._get_simple_unary()
-# #     img = test_utils._get_simple_img()
+#     unary = test_utils._get_simple_unary()
+#     img = test_utils._get_simple_img()
 
-# #     img = np.transpose(img, [2, 0, 1])
-# #     img_torch = Variable(torch.Tensor(img), requires_grad=False).cuda()
+#     img = np.transpose(img, [2, 0, 1])
+#     img_torch = Variable(torch.Tensor(img), requires_grad=False).cuda()
 
-# #     unary_var = Variable(torch.Tensor(unary)).cuda()
-# #     unary_var = unary_var.view(2, 10, 10)
-# #     img_var = Variable(torch.Tensor(img)).cuda()
+#     unary_var = Variable(torch.Tensor(unary)).cuda()
+#     unary_var = unary_var.view(2, 10, 10)
+#     img_var = Variable(torch.Tensor(img)).cuda()
 
-# #     prediction = tcrf.forward(unary_var, img_var).cpu().data.numpy()
-# #     res = np.argmax(prediction, axis=0)
-# #     import scipy.misc
-# #     scp.misc.imsave("out.png", res)
-# #     # d.addPairwiseBilateral(2, 2, img, 3)
+#     prediction = tcrf.forward(unary_var, img_var).cpu().data.numpy()
+#     res = np.argmax(prediction, axis=0)
+#     import scipy.misc
+#     scp.misc.imsave("out.png", res)
+#     # d.addPairwiseBilateral(2, 2, img, 3)
+
+
 
 """
 The MIT License (MIT)
@@ -915,7 +905,7 @@ class ClsbdCRF(nn.Module):
 
 		return
 
-	def forward(self, unary, clsbd, num_iter=5):
+	def forward(self, unary, clsbd, num_iter=5, mask=None):
 		""" Run a forward pass through ConvCRF.
 		Arguments:
 			unary: torch.Tensor with shape [bs, num_classes, height, width].
