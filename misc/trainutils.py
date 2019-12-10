@@ -203,7 +203,9 @@ def model_alternate_train(train_data_loader, model, scheduler, avg_meter, timer,
 	for step, pack in enumerate(train_data_loader):
 
 		scheduler.optimizer.zero_grad()
-
+		pack_img = pack['img'].cuda()
+		pack_label = pack['label'].cuda(non_blocking=True)
+		pack_seg_label = pack['seg_label'].cuda(non_blocking=True)
 		loss = 0.
 		st = [0,8]
 		ed = [8,16]
@@ -252,7 +254,7 @@ def model_alternate_train(train_data_loader, model, scheduler, avg_meter, timer,
 	torch.cuda.empty_cache()
 	return model.module, scheduler.is_max_step()
 
-def _seg_validate_infer_worker(process_id, model, dataset, args, use_crf=True):
+def _seg_validate_infer_worker(process_id, model, dataset, args, use_crf=False):
 	databin = dataset[process_id]
 	n_gpus = torch.cuda.device_count()
 	data_loader = DataLoader(databin, batch_size=1, shuffle=False, num_workers=args.num_workers // n_gpus, pin_memory=False)
