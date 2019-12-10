@@ -89,6 +89,23 @@ def get_clsbd_optimizer(clsbd,args,clsbd_max_step):
 
 	return clsbd_optimizer 
 
+
+def reload_res101(model):
+	model_dict = model.base.state_dict()
+	checkpoint = resnet50.get_resnet101_state_dict()
+	# 1. filter out unnecessary keys
+	pretrained_dict = {}
+	for k, v in checkpoint.items():
+		# if 'module' in k:
+		# 	k = k[7:]
+		if(k in model_dict):
+			pretrained_dict[k] = v
+	# 2. overwrite entries in the existing state dict
+	model_dict.update(pretrained_dict)
+	# 3. load the new state dict
+	model.base.load_state_dict(model_dict)
+	return model 
+
 def reload_res50(model):
 	model_dict = model.base.state_dict()
 	checkpoint = resnet50.get_resnet50_state_dict()
@@ -111,7 +128,7 @@ def run(args):
 	if args.cam_preload:
 		model_init.load_state_dict(torch.load(args.cam_weights_name + '.pth'), strict=True)
 
-	model = getattr(importlib.import_module(args.seg_network), 'DeepLabV2_ResNet50_MSC')(21)
+	model = getattr(importlib.import_module(args.seg_network), 'DeepLabV2_ResNet101_MSC')(21)
 
 	clsbd = getattr(importlib.import_module(args.irn_network), 'Net')()
 	if args.clsbd_preload:
@@ -152,8 +169,8 @@ def run(args):
 		rt_key = determine_routine(ep,args)
 		if rt_key == 'model':
 			model = getattr(importlib.import_module(args.seg_network), 'DeepLabV2_ResNet101_MSC')(21)
-			# model = reload_res50(model)
-			model.load_state_dict(torch.load('exp/betterinfer101/sess/res50_cam_8.pth'), strict=False)
+			model = reload_res101(model)
+			# model.load_state_dict(torch.load('exp/betterinfer101/sess/res50_cam_8.pth'), strict=False)
 			model_optimizer = get_model_optimizer(model, args, 10*max_step)
 			best_miou = 0
 			miou = -1
@@ -161,10 +178,10 @@ def run(args):
 			# model_optimizer.last_epoch = 1068
 			# model_optimizer.step(epoch=2645)
 			while True:
-				# model_new, is_max_step = model_alternate_train(model_train_data_loader, model, model_optimizer, avg_meter, timer, args, ep, logger)
+				model_new, is_max_step = model_alternate_train(model_train_data_loader, model, model_optimizer, avg_meter, timer, args, ep, logger)
 				# import pdb;pdb.set_trace()
-				miou = model_validate(model, args, ep, logger, make_label=False)
-				exit(0)
+				miou = model_validate(model_new, args, ep, logger, make_label=False)
+				# exit(0)
 				if is_max_step: #miou < best_miou or 
 					# model_validate(model_new, args, ep, make_label=True)
 					exit(0)
@@ -177,13 +194,13 @@ def run(args):
 			# # # model = reload_res50(model)
 			# model.load_state_dict(torch.load('exp/betterinfer101/sess/res50_cam_6.pth'), strict=False)
 			clsbd = getattr(importlib.import_module(args.irn_network), 'Net')()
-			# clsbd.load_state_dict(torch.load('exp/betterinfer101/sess/res50_clsbd_7.pth'), strict=False)
+			clsbd.load_state_dict(torch.load('exp/betterinfer101/sess/res50_clsbd_5.pth'), strict=False)
 
-			clsbd_optimizer = get_clsbd_optimizer(clsbd, args, 3*max_step)
-			is_max_step = False
-			while not is_max_step:
-				clsbd, is_max_step = clsbd_alternate_train(clsbd_train_data_loader, clsbd, clsbd_optimizer, avg_meter, timer, args, ep)
-			exit(0)
+			# clsbd_optimizer = get_clsbd_optimizer(clsbd, args, 3*max_step)
+			# is_max_step = False
+			# while not is_max_step:
+			# 	clsbd, is_max_step = clsbd_alternate_train(clsbd_train_data_loader, clsbd, clsbd_optimizer, avg_meter, timer, args, ep)
+			# exit(0)
 			# import pdb;pdb.set_trace()
 			model_in = model_init if ep==5 else model
 			# import pdb;pdb.set_trace()

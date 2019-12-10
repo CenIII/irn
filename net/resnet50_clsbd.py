@@ -272,8 +272,6 @@ class Net(nn.Module):
         super().eval()
         self.convcrf1 = ClsbdCRF(infer_conf, nclasses=21).cuda()
         self.convcrf1.eval()
-        self.convcrf2 = ClsbdCRF(infer_conf2, nclasses=21).cuda()
-        self.convcrf2.eval()
         self.convcrf = self.convcrf1
         return self
     def usecrf(self,ind):
