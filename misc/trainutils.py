@@ -586,7 +586,7 @@ def _clsbd_label_infer_worker(process_id, model, clsbd, dataset, args, label_out
 
 	with torch.no_grad(), cuda.device(process_id):
 
-		model.cuda()
+		# model.cuda()
 		clsbd.cuda()
 		msu = make_seg_unary_for_init
 		if not is_init:
@@ -636,7 +636,7 @@ def _clsbd_label_infer_worker(process_id, model, clsbd, dataset, args, label_out
 def clsbd_validate(model, clsbd, args, ep):
 	# 分两步，第一步multiprocess infer结果并保存到validate/clsbd/epoch#
 	# 第二步参考eval_cam.py, 从文件夹读取结果并单线程eval结果
-	model.eval()
+	# model.eval()
 	clsbd.eval()
 	# step 1: make crf results
 	if args.quick_infer:
@@ -654,10 +654,10 @@ def clsbd_validate(model, clsbd, args, ep):
 	else:
 		print('Validate: 1. Making crf inference labels...')
 		n_gpus = torch.cuda.device_count()
-		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.train_list,
+		dataset = voc12.dataloader.VOC12ClassificationDatasetMSF(args.infer_list,
 																voc12_root=args.voc12_root, scales=args.cam_scales)
 		dataset = torchutils.split_dataset(dataset, n_gpus)
-		label_out_dir = args.sem_seg_out_dir+str(ep) #args.valid_clsbd_out_dir#
+		label_out_dir = args.valid_clsbd_out_dir#args.sem_seg_out_dir+str(ep) #args.valid_clsbd_out_dir#
 		os.makedirs(label_out_dir, exist_ok=True)
 		ir_label_dir = args.ir_label_out_dir + str(ep-1)
 		multiprocessing.spawn(_clsbd_label_infer_worker, nprocs=n_gpus, args=(model, clsbd, dataset, args, label_out_dir, ir_label_dir, (ep==5)), join=True)
@@ -666,6 +666,6 @@ def clsbd_validate(model, clsbd, args, ep):
 		
 		print('Validate: 2. Eval labels...')
 		# step 2: eval results
-		miou = eval_metrics('train', label_out_dir, args)
+		# miou = eval_metrics('train', label_out_dir, args)
 		exit(0)
 		return None#miou

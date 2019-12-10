@@ -107,15 +107,15 @@ def reload_res50(model):
 
 def run(args):
 
-	model_init = getattr(importlib.import_module(args.cam_network), 'Net')()
-	if args.cam_preload:
-		model_init.load_state_dict(torch.load(args.cam_weights_name + '.pth'), strict=True)
+	# model_init = getattr(importlib.import_module(args.cam_network), 'Net')()
+	# if args.cam_preload:
+	# 	model_init.load_state_dict(torch.load(args.cam_weights_name + '.pth'), strict=True)
 
-	model = getattr(importlib.import_module(args.seg_network), 'DeepLabV2_ResNet50_MSC')(21)
+	# model = getattr(importlib.import_module(args.seg_network), 'DeepLabV2_ResNet50_MSC')(21)
 
-	clsbd = getattr(importlib.import_module(args.irn_network), 'Net')()
-	if args.clsbd_preload:
-		clsbd.load_state_dict(torch.load(args.irn_weights_name), strict=False)
+	# clsbd = getattr(importlib.import_module(args.irn_network), 'Net')()
+	# if args.clsbd_preload:
+	# 	clsbd.load_state_dict(torch.load(args.irn_weights_name), strict=False)
 
 	# model train loader
 	model_train_dataset = voc12.dataloader.VOC12ClassificationDatasetMSF_TrainModel(args.train_list, voc12_root=args.voc12_root, label_dir=args.sem_seg_out_dir, #resize_long=(320, 640),
@@ -173,11 +173,11 @@ def run(args):
 				model = model_new
 		elif rt_key == 'clsbd':
 			# import pdb;pdb.set_trace()
-			model = getattr(importlib.import_module(args.seg_network), 'DeepLabV2_ResNet50_MSC')(21)
-			# # model = reload_res50(model)
-			model.load_state_dict(torch.load('exp/betterinfer/sess/res50_cam_6.pth'), strict=False)
+			# model = getattr(importlib.import_module(args.seg_network), 'DeepLabV2_ResNet50_MSC')(21)
+			# # # model = reload_res50(model)
+			# model.load_state_dict(torch.load('exp/betterinfer/sess/res50_cam_6.pth'), strict=False)
 			clsbd = getattr(importlib.import_module(args.irn_network), 'Net')()
-			clsbd.load_state_dict(torch.load('exp/betterinfer/sess/res50_clsbd_7.pth'), strict=False)
+			clsbd.load_state_dict(torch.load('exp/betterinfer/sess/res50_clsbd_5.pth'), strict=False)
 
 			# clsbd_optimizer = get_clsbd_optimizer(clsbd, args, 3*max_step)
 			# is_max_step = False
@@ -185,7 +185,7 @@ def run(args):
 			# 	clsbd, is_max_step = clsbd_alternate_train(clsbd_train_data_loader, clsbd, clsbd_optimizer, avg_meter, timer, args, ep)
 			# exit(0)
 			# import pdb;pdb.set_trace()
-			model_in = model_init if ep==5 else model
+			model_in = None#model_init if ep==5 else model
 			# import pdb;pdb.set_trace()
 			clsbd_validate(model_in, clsbd, args, ep)
 
