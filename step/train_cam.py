@@ -176,12 +176,12 @@ def run(args):
 			miou = -1
 			is_max_step = False
 			# model_optimizer.last_epoch = 1068
-			model_optimizer.step(epoch=661)
+			# model_optimizer.step(epoch=661)
 			while True:
-				model_new, is_max_step = model_alternate_train(model_train_data_loader, model, model_optimizer, avg_meter, timer, args, ep, logger)
+				# model_new, is_max_step = model_alternate_train(model_train_data_loader, model, model_optimizer, avg_meter, timer, args, ep, logger)
 				# import pdb;pdb.set_trace()
-				miou = model_validate(model_new, args, ep, logger, make_label=False)
-				# exit(0)
+				miou = model_validate(model, args, ep, logger, make_label=True)
+				exit(0)
 				if is_max_step: #miou < best_miou or 
 					# model_validate(model_new, args, ep, make_label=True)
 					exit(0)
