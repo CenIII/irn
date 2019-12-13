@@ -555,6 +555,7 @@ def clsbd_alternate_train(train_data_loader, clsbd, optimizer, avg_meter, timer,
 	else:
 		timer.reset_stage()
 		torch.save(clsbd.module.state_dict(), args.irn_weights_name + '_' + str(ep) + '.pth')
+	torch.cuda.empty_cache()
 	return clsbd.module, optimizer.is_max_step()
 
 def make_seg_output_from_cam(img_name,args,orig_size):
